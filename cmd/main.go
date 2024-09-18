@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"strings"
 	"time"
+	"tunes/internal/music"
 
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
@@ -13,10 +14,20 @@ import (
 
 func getLogger(env string) *zap.Logger {
 	if strings.ToUpper(env) == "PROD" {
-		return zap.Must(zap.NewProduction())
+		return zap.Must(zap.NewProduction(zap.WithCaller(true)))
 	} else {
 		return zap.Must(zap.NewDevelopment())
 	}
+}
+
+func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Session, error) {
+	bot, err := discordgo.New("Bot " + token)
+	if err != nil {
+		return nil, err
+	}
+
+	bot.Client = httpClient
+	return bot, nil
 }
 
 func main() {
@@ -34,14 +45,13 @@ func main() {
 		Timeout: time.Second * 5,
 	}
 
-	bot, err := discordgo.New("Bot " + discordToken)
-	bot.Client = &httpClient
-
+	bot, err := newDiscordBotClient(discordToken, &httpClient)
 	if err != nil {
 		logger.Fatal("bot could not be booted", zap.Error(err))
 	}
 
-	bot.Identify.Intents = discordgo.IntentsGuildMembers
+	bot.Identify.Intents = discordgo.IntentsGuildMembers | discordgo.IntentsAllWithoutPrivileged
+
 	bot.StateEnabled = true
 	bot.Identify.Presence = discordgo.GatewayStatusUpdate{
 		Game: discordgo.Activity{
@@ -49,7 +59,17 @@ func main() {
 			Type: discordgo.ActivityTypeGame,
 		},
 	}
+
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
+		musicPlayerCog, err := music.NewMusicPlayerCog(logger)
+		if err != nil {
+			logger.Fatal("unable to instantiate greeter cog", zap.Error(err))
+		}
+
+		if err = musicPlayerCog.RegisterCommands(session); err != nil {
+			logger.Fatal("unable to register greeter commands", zap.Error(err))
+		}
+
 		logger.Info("Bot has connected")
 	})
 
