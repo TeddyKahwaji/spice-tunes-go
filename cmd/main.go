@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,10 +24,11 @@ func getLogger(env string) *zap.Logger {
 func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Session, error) {
 	bot, err := discordgo.New("Bot " + token)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating bot: %w", err)
 	}
 
 	bot.Client = httpClient
+
 	return bot, nil
 }
 
@@ -41,6 +43,7 @@ func main() {
 	}()
 
 	discordToken := os.Getenv("SPICE_TUNES_DISCORD_TOKEN")
+
 	httpClient := http.Client{
 		Timeout: time.Second * 5,
 	}
@@ -61,7 +64,7 @@ func main() {
 	}
 
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
-		musicPlayerCog, err := music.NewMusicPlayerCog(logger)
+		musicPlayerCog, err := music.NewMusicPlayerCog(logger, &httpClient)
 		if err != nil {
 			logger.Fatal("unable to instantiate greeter cog", zap.Error(err))
 		}

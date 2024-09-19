@@ -27,3 +27,6 @@ go.work.sum
 
 # debug bin 
 *debug_bin*
+
+# vscode settings
+.vscode

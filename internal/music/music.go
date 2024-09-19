@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"net/http"
 	"sync"
 	"tunes/pkg/util"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/jung-m/dca"
+	"github.com/jonas747/dca"
 	"github.com/wader/goutubedl"
 	"go.uber.org/zap"
 )
@@ -31,15 +31,17 @@ type guildPlayer struct {
 }
 
 type musicPlayerCog struct {
+	httpClient       *http.Client
 	mu               sync.RWMutex
 	logger           *zap.Logger
 	songSignal       chan *guildPlayer
 	guildVoiceStates map[string]*guildPlayer
 }
 
-func NewMusicPlayerCog(logger *zap.Logger) (*musicPlayerCog, error) {
+func NewMusicPlayerCog(logger *zap.Logger, httpClient *http.Client) (*musicPlayerCog, error) {
 	songSignals := make(chan *guildPlayer)
 	musicCog := &musicPlayerCog{
+		httpClient:       httpClient,
 		logger:           logger,
 		songSignal:       songSignals,
 		guildVoiceStates: make(map[string]*guildPlayer),
@@ -61,7 +63,7 @@ func (m *musicPlayerCog) GetCommands() []*discordgo.ApplicationCommand {
 
 func (m *musicPlayerCog) RegisterCommands(session *discordgo.Session) error {
 	if _, err := session.ApplicationCommandBulkOverwrite(session.State.Application.ID, "", m.GetCommands()); err != nil {
-		return err
+		return fmt.Errorf("bulk overwriting commands: %w", err)
 	}
 
 	session.AddHandler(m.musicCogCommandHandler)
@@ -81,7 +83,6 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
 	}
 
 	m.mu.Lock()
-	guildPlayer.voiceState = Playing
 	audioPath := guildPlayer.queue[0]
 	guildPlayer.queue = guildPlayer.queue[1:]
 	m.mu.Unlock()
@@ -96,15 +97,17 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
 	opts.RawOutput = true
 	opts.Bitrate = 128
 
-	es, err := dca.EncodeFile(audioPath, opts)
+	encodingStream, err := dca.EncodeFile(audioPath, opts)
 	if err != nil {
 		m.logger.Error("error encoding file", zap.Error(err))
+
 		return
 	}
 
-	defer es.Cleanup()
+	defer encodingStream.Cleanup()
+
 	doneChan := make(chan error)
-	guildPlayer.stream = dca.NewStream(es, guildPlayer.voiceClient, doneChan)
+	guildPlayer.stream = dca.NewStream(encodingStream, guildPlayer.voiceClient, doneChan)
 	guildPlayer.voiceState = Playing
 
 	for err := range doneChan {
@@ -115,6 +118,10 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
 				} else {
 					guildPlayer.voiceState = NotPlaying
 				}
+
+				if err := util.DeleteFile(audioPath); err != nil {
+					m.logger.Warn("could not delete file", zap.Error(err))
+				}
 			} else {
 				m.logger.Warn("error during audio stream", zap.Error(err))
 			}
@@ -124,7 +131,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
 	}
 }
 
-func (m *musicPlayerCog) Play(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	if _, ok := m.guildVoiceStates[interaction.GuildID]; !ok {
 		voiceState, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 		if err != nil {
@@ -143,16 +150,24 @@ func (m *musicPlayerCog) Play(session *discordgo.Session, interaction *discordgo
 			voiceState:  NotPlaying,
 		}
 	}
-	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 
-	result, err := goutubedl.New(context.Background(), "https://www.youtube.com/watch?v=xjoBP7SDgaY", goutubedl.Options{})
+	guildPlayer := m.guildVoiceStates[interaction.GuildID]
+	ctx := context.Background()
+
+	result, err := goutubedl.New(ctx, "https://www.youtube.com/watch?v=xjoBP7SDgaY", goutubedl.Options{
+		Type:       goutubedl.TypeSingle,
+		HTTPClient: m.httpClient,
+	})
 	if err != nil {
 		return fmt.Errorf("attempting to download from youtube: %w", err)
 	}
 
-	downloadResult, err := result.Download(context.Background(), "best")
+	downloadResult, err := result.DownloadWithOptions(ctx, goutubedl.DownloadOptions{
+		Filter:            "best",
+		DownloadAudioOnly: true,
+	})
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("downloading youtube data: %w", err)
 	}
 
 	defer func() {
@@ -177,6 +192,7 @@ func (m *musicPlayerCog) Play(session *discordgo.Session, interaction *discordgo
 	defer m.mu.Unlock()
 
 	m.songSignal <- guildPlayer
+
 	return nil
 }
 
@@ -189,7 +205,7 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 
 	switch interaction.ApplicationCommandData().Name {
 	case "play":
-		err = m.Play(session, interaction)
+		err = m.play(session, interaction)
 	}
 
 	if err != nil {
