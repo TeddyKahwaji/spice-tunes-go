@@ -56,7 +56,14 @@ func (m *musicPlayerCog) GetCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
 			Name:        "play",
-			Description: "play a song",
+			Description: "Plays desired song/playlist",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "query",
+					Description: "Song/playlist search query",
+					Type:        discordgo.ApplicationCommandOptionString,
+				},
+			},
 		},
 	}
 }
@@ -150,7 +157,8 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			voiceState:  NotPlaying,
 		}
 	}
-
+	// options := interaction.ApplicationCommandData().Options
+	// query := options[0].Value.(string)
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 	ctx := context.Background()
 
