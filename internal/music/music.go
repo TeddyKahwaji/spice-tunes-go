@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 
+	"tunes/internal/embeds"
 	"tunes/pkg/spotify"
 	"tunes/pkg/util"
 
@@ -85,19 +87,70 @@ func (m *musicPlayerCog) RegisterCommands(session *discordgo.Session) error {
 
 func (m *musicPlayerCog) globalPlay() {
 	for gp := range m.songSignal {
-		go m.playAudio(gp)
+		go func() {
+			if err := m.playAudio(gp); err != nil {
+				m.logger.Warn("error playing audio", zap.String("guild_id", gp.guildID))
+			}
+		}()
 	}
 }
 
-func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
+func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
+	result, err := goutubedl.New(ctx, audioTrackName, goutubedl.Options{
+		Type:       goutubedl.TypeSingle,
+		HTTPClient: m.httpClient,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attempting to download from youtube: %w", err)
+	}
+
+	downloadResult, err := result.DownloadWithOptions(ctx, goutubedl.DownloadOptions{
+		Filter:            "best",
+		DownloadAudioOnly: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("downloading youtube data: %w", err)
+	}
+
+	defer func() {
+		if err := downloadResult.Close(); err != nil {
+			m.logger.Warn("couldn't close downloaded result", zap.Error(err))
+		}
+	}()
+
+	file, err := util.DownloadFileToTempDirectory(downloadResult)
+	if err != nil {
+		return nil, fmt.Errorf("error downloading youtube content to temporary file: %w", err)
+	}
+
+	return file, nil
+}
+
+func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
+	// exit if no voice client or no tracks in the queue
 	if guildPlayer.voiceClient == nil || len(guildPlayer.queue) == 0 {
-		return
+		return nil
 	}
 
 	m.mu.Lock()
-	audioPath := guildPlayer.queue[0]
+	audioTrackName := guildPlayer.queue[0]
 	guildPlayer.queue = guildPlayer.queue[1:]
 	m.mu.Unlock()
+
+	ctx := context.Background()
+
+	file, err := m.downloadTrack(ctx, audioTrackName)
+	if err != nil {
+		return fmt.Errorf("downloading track: %w", err)
+	}
+
+	audioPath := file.Name()
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			m.logger.Warn("could not close file", zap.Error(err), zap.String("file_name", file.Name()))
+		}
+	}()
 
 	defer func() {
 		if err := util.DeleteFile(audioPath); err != nil {
@@ -111,9 +164,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
 
 	encodingStream, err := dca.EncodeFile(audioPath, opts)
 	if err != nil {
-		m.logger.Error("error encoding file", zap.Error(err))
-
-		return
+		return fmt.Errorf("encoding file: %w", err)
 	}
 
 	defer encodingStream.Cleanup()
@@ -141,12 +192,30 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) {
 			m.logger.Warn("something went wrong during stream session", zap.Error(err))
 		}
 	}
+
+	return nil
 }
 
 func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	if _, ok := m.guildVoiceStates[interaction.GuildID]; !ok {
 		voiceState, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 		if err != nil {
+			if errors.Is(err, discordgo.ErrStateNotFound) {
+				invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("**%s, you must be in a voice channel.**", interaction.Member.User.Username))
+				err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Embeds: []*discordgo.MessageEmbed{invalidUsageEmbed},
+						Flags:  discordgo.MessageFlagsEphemeral,
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("interaction response: %w", err)
+				}
+
+				return nil
+			}
+
 			return fmt.Errorf("retrieving voice state: %w", err)
 		}
 
@@ -163,6 +232,12 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 		}
 	}
 
+	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	}); err != nil {
+		return fmt.Errorf("deferring message: %w", err)
+	}
+
 	options := interaction.ApplicationCommandData().Options
 	query := options[0].Value.(string)
 	// audioType, err := models.DetermineAudioType(query)
@@ -171,46 +246,14 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	// }
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
-	ctx := context.Background()
-
-	result, err := goutubedl.New(ctx, query, goutubedl.Options{
-		Type:       goutubedl.TypeSingle,
-		HTTPClient: m.httpClient,
-	})
-	if err != nil {
-		return fmt.Errorf("attempting to download from youtube: %w", err)
-	}
-
-	downloadResult, err := result.DownloadWithOptions(ctx, goutubedl.DownloadOptions{
-		Filter:            "best",
-		DownloadAudioOnly: true,
-	})
-	if err != nil {
-		return fmt.Errorf("downloading youtube data: %w", err)
-	}
-
-	defer func() {
-		if err := downloadResult.Close(); err != nil {
-			m.logger.Warn("couldn't close downloaded result", zap.Error(err))
-		}
-	}()
-
-	file, err := util.DownloadFileToTempDirectory(downloadResult)
-	if err != nil {
-		return fmt.Errorf("error downloading youtube content to temporary file: %w", err)
-	}
-
-	defer func() {
-		if err := file.Close(); err != nil {
-			m.logger.Warn("could not close file", zap.Error(err), zap.String("file_name", file.Name()))
-		}
-	}()
 
 	m.mu.Lock()
-	guildPlayer.queue = append(guildPlayer.queue, file.Name())
+	guildPlayer.queue = append(guildPlayer.queue, query)
 	defer m.mu.Unlock()
 
-	m.songSignal <- guildPlayer
+	if guildPlayer.voiceState == NotPlaying {
+		m.songSignal <- guildPlayer
+	}
 
 	return nil
 }

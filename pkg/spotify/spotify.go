@@ -1,7 +1,6 @@
 package spotify
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -23,7 +22,7 @@ type TrackData struct {
 	TrackDuration time.Duration
 }
 
-type SpotifyData struct {
+type Data struct {
 	Tracks []TrackData
 	Type   models.SupportedAudioType
 }
@@ -34,9 +33,9 @@ func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
 	}
 }
 
-func (s *SpotifyWrapper) GetTracksData(ctx context.Context, query string) (*SpotifyData, error) {
+func (s *SpotifyWrapper) GetTracksData(query string) (*Data, error) {
 	var (
-		result *SpotifyData
+		result *Data
 		err    error
 	)
 
@@ -69,7 +68,7 @@ func (s *SpotifyWrapper) GetTracksData(ctx context.Context, query string) (*Spot
 	return result, err
 }
 
-func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*SpotifyData, error) {
+func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*Data, error) {
 	trackData := make([]TrackData, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
@@ -83,13 +82,13 @@ func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*SpotifyD
 		TrackDuration: track.TimeDuration(),
 	})
 
-	return &SpotifyData{
+	return &Data{
 		Tracks: trackData,
 		Type:   models.SpotifyTrack,
 	}, nil
 }
 
-func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, error) {
+func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*Data, error) {
 	trackData := []TrackData{}
 
 	var (
@@ -143,19 +142,19 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, e
 		}
 	}
 
-	return &SpotifyData{
+	return &Data{
 		Tracks: trackData,
 		Type:   models.SpotifyAlbum,
 	}, nil
 }
 
-func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData, error) {
+func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*Data, error) {
 	trackData := []TrackData{}
 
 	var (
 		wg     sync.WaitGroup
 		mu     sync.Mutex
-		offset int = 0
+		offset int
 		limit  int = 50
 	)
 
@@ -208,7 +207,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData
 		}
 	}
 
-	return &SpotifyData{
+	return &Data{
 		Tracks: trackData,
 		Type:   models.SpotifyPlaylist,
 	}, nil

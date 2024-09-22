@@ -26,7 +26,7 @@ const (
 	SoundCloudRegex      = `^https?:\/\/(soundcloud\.com|snd\.sc)\/(.*)$`
 )
 
-var UnsupportedAudioTypeErr = errors.New("search query provided is not a supported audio type")
+var ErrUnsupportedAudioType = errors.New("search query provided is not a supported audio type")
 
 func DetermineAudioType(query string) (SupportedAudioType, error) {
 	if matched, _ := regexp.MatchString(YoutubeVideoRegex, query); matched {
@@ -47,7 +47,7 @@ func DetermineAudioType(query string) (SupportedAudioType, error) {
 		return SoundCloudTrack, nil
 	}
 
-	return "", UnsupportedAudioTypeErr
+	return "", ErrUnsupportedAudioType
 }
 
 // Audio type is a playlist

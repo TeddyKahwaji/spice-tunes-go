@@ -21,9 +21,9 @@ import (
 func getLogger(env string) *zap.Logger {
 	if strings.ToUpper(env) == "PROD" {
 		return zap.Must(zap.NewProduction(zap.WithCaller(true)))
-	} else {
-		return zap.Must(zap.NewDevelopment())
 	}
+
+	return zap.Must(zap.NewDevelopment())
 }
 
 func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Session, error) {
