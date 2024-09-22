@@ -59,17 +59,18 @@ func (s *SpotifyWrapper) GetTracksData(audioType audiotype.SupportedAudioType, q
 }
 
 func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*audiotype.Data, error) {
-	trackData := make([]audiotype.TrackData, 1)
+	trackData := make([]audiotype.TrackData, 0, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
 	if err != nil {
 		return nil, fmt.Errorf("getting track data: %w", err)
 	}
 
+	trackTitle := track.Name + " - " + track.Artists[0].Name
 	trackData = append(trackData, audiotype.TrackData{
-		TrackName:     track.Name,
+		TrackName:     trackTitle,
 		TrackImageURL: track.Album.Images[0].URL,
-		Query:         "ytsearch1:" + track.Name,
+		Query:         "ytsearch1:" + trackTitle,
 	})
 
 	return &audiotype.Data{

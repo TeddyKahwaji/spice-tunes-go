@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,21 +22,6 @@ import (
 	"github.com/wader/goutubedl"
 	"go.uber.org/zap"
 )
-
-type VoiceState string
-
-const (
-	Playing    VoiceState = "PLAYING"
-	NotPlaying VoiceState = "NOT_PLAYING"
-)
-
-type guildPlayer struct {
-	guildID     string
-	voiceClient *discordgo.VoiceConnection
-	queue       []string
-	voiceState  VoiceState
-	stream      *dca.StreamingSession
-}
 
 type musicPlayerCog struct {
 	httpClient       *http.Client
@@ -118,25 +104,46 @@ func (m *musicPlayerCog) globalPlay() {
 	for gp := range m.songSignal {
 		go func() {
 			if err := m.playAudio(gp); err != nil {
-				m.logger.Warn("error playing audio", zap.String("guild_id", gp.guildID))
+				m.logger.Warn("error playing audio", zap.String("guild_id", gp.guildID), zap.Error(err))
 			}
 		}()
 	}
 }
 
 func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*track, error) {
-	result, err := goutubedl.New(ctx, audioTrackName, goutubedl.Options{
-		Type:       goutubedl.TypeSingle,
-		HTTPClient: m.httpClient,
-	})
+	var (
+		options         goutubedl.Options
+		downloadOptions goutubedl.DownloadOptions
+	)
+
+	if strings.Contains(audioTrackName, "ytsearch") {
+		options = goutubedl.Options{
+			Type:       goutubedl.TypePlaylist,
+			HTTPClient: m.httpClient,
+		}
+		downloadOptions = goutubedl.DownloadOptions{
+			Filter:            "best",
+			DownloadAudioOnly: true,
+			PlaylistIndex:     1,
+		}
+
+	} else {
+		options = goutubedl.Options{
+			Type:       goutubedl.TypeSingle,
+			HTTPClient: m.httpClient,
+		}
+		downloadOptions = goutubedl.DownloadOptions{
+			Filter:            "best",
+			DownloadAudioOnly: true,
+		}
+	}
+
+	result, err := goutubedl.New(ctx, audioTrackName, options)
 	if err != nil {
 		return nil, fmt.Errorf("attempting to download from youtube: %w", err)
 	}
 
-	downloadResult, err := result.DownloadWithOptions(ctx, goutubedl.DownloadOptions{
-		Filter:            "best",
-		DownloadAudioOnly: true,
-	})
+	downloadResult, err := result.DownloadWithOptions(ctx, downloadOptions)
 	if err != nil {
 		return nil, fmt.Errorf("downloading youtube data: %w", err)
 	}
@@ -165,8 +172,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	}
 
 	m.mu.Lock()
-	audioTrackName := guildPlayer.queue[0]
-	guildPlayer.queue = guildPlayer.queue[1:]
+	audioTrackName := guildPlayer.getCurrentSong()
 	m.mu.Unlock()
 
 	ctx := context.Background()
@@ -207,10 +213,14 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	for err := range doneChan {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if len(guildPlayer.queue) > 0 {
+				if guildPlayer.queuePtr+1 < len(guildPlayer.queue) {
+					guildPlayer.queuePtr += 1
 					m.songSignal <- guildPlayer
 				} else {
 					guildPlayer.voiceState = NotPlaying
+					m.mu.Lock()
+					guildPlayer.resetQueue()
+					m.mu.Unlock()
 				}
 
 				if err := util.DeleteFile(filePath); err != nil {
@@ -260,6 +270,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			guildID:     interaction.GuildID,
 			queue:       []string{},
 			voiceState:  NotPlaying,
+			queuePtr:    0,
 		}
 	}
 
