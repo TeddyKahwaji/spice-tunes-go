@@ -98,6 +98,7 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*audiotype.Data
 	for ; ; page++ {
 		tracks := result.Tracks.Tracks
 		wg.Add(1)
+
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
 

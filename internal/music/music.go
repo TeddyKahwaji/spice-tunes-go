@@ -218,6 +218,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 					m.songSignal <- guildPlayer
 				} else {
 					guildPlayer.voiceState = NotPlaying
+
 					m.mu.Lock()
 					guildPlayer.resetQueue()
 					m.mu.Unlock()

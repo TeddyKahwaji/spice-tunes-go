@@ -63,7 +63,7 @@ func DetermineAudioType(query string) (SupportedAudioType, error) {
 		return SoundCloudTrack, nil
 	}
 
-	// if input is not a URl assume it is a generic search
+	// if input is not a URL assume it is a generic search.
 	if u, err := url.Parse(query); err != nil || u.Scheme == "" || u.Host == "" {
 		return GenericSearch, nil
 	}
@@ -71,7 +71,7 @@ func DetermineAudioType(query string) (SupportedAudioType, error) {
 	return "", ErrUnsupportedAudioType
 }
 
-// Audio type is a playlist
+// audio type is a playlist.
 func IsMultiTrackType(audioType SupportedAudioType) bool {
 	return audioType == SpotifyPlaylist || audioType == SpotifyAlbum
 }
