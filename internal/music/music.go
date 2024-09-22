@@ -109,6 +109,7 @@ func (m *musicPlayerCog) RegisterCommands(session *discordgo.Session) error {
 	}
 
 	session.AddHandler(m.musicCogCommandHandler)
+	session.AddHandler(m.voiceStateUpdate)
 
 	return nil
 }
@@ -295,6 +296,31 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	}
 
 	return nil
+}
+
+func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.VoiceStateUpdate) {
+	hasLeft := vc.BeforeUpdate != nil && !vc.Member.User.Bot && vc.ChannelID == ""
+	if hasLeft {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		channelMemberCount, err := util.GetVoiceChannelMemberCount(session, vc.BeforeUpdate.GuildID, vc.BeforeUpdate.ChannelID)
+		if err != nil {
+			m.logger.Error("error getting channel member count", zap.Error(err), zap.String("channel_id", vc.BeforeUpdate.ChannelID))
+			return
+		}
+
+		if channelMemberCount <= 1 {
+			if botVoiceConnection, ok := session.VoiceConnections[vc.GuildID]; ok && botVoiceConnection.ChannelID == vc.BeforeUpdate.ChannelID {
+				if err := botVoiceConnection.Disconnect(); err != nil {
+					m.logger.Error("error disconnecting from channel", zap.Error(err))
+					return
+				}
+
+				delete(m.guildVoiceStates, vc.GuildID)
+			}
+		}
+	}
+
 }
 
 func (m *musicPlayerCog) retrieveTracks(audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
