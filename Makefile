@@ -12,3 +12,7 @@ clean:
 
 lint:
 	golangci-lint run --enable-all
+
+
+gofumpt: 
+	gofumpt -l -w .

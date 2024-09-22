@@ -102,22 +102,28 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, e
 		return nil, fmt.Errorf("getting album track items: %w", err)
 	}
 
-	for {
+	orderedData := make(map[int][]TrackData)
+
+	page := 0
+	for ; ; page++ {
 		tracks := result.Tracks.Tracks
 
 		wg.Add(1)
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
-			mu.Lock()
-			defer mu.Unlock()
 
+			data := make([]TrackData, 0, len(tracks))
 			for _, track := range tracks {
-				trackData = append(trackData, TrackData{
+				data = append(data, TrackData{
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
 					TrackImageURL: result.Images[0].URL,
 					TrackDuration: track.TimeDuration(),
 				})
 			}
+
+			mu.Lock()
+			orderedData[page] = data
+			mu.Unlock()
 		}(tracks)
 
 		if result.Tracks.Next == "" {
@@ -129,6 +135,12 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, e
 			return nil, fmt.Errorf("getting next page: %w", err)
 		}
 
+	}
+
+	for currentPage := range page + 1 {
+		if data, ok := orderedData[currentPage]; ok {
+			trackData = append(trackData, data...)
+		}
 	}
 
 	return &SpotifyData{
@@ -155,22 +167,28 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
 
-	for {
-		tracks := result.Tracks
+	orderedData := make(map[int][]TrackData)
 
+	page := 0
+	for ; ; page++ {
+		tracks := result.Tracks
 		wg.Add(1)
+
 		go func(tracks []spotify.PlaylistTrack) {
 			defer wg.Done()
-			mu.Lock()
-			defer mu.Unlock()
 
+			data := make([]TrackData, 0, len(tracks))
 			for _, track := range tracks {
-				trackData = append(trackData, TrackData{
+				data = append(data, TrackData{
 					TrackName:     track.Track.Name + " - " + track.Track.Artists[0].Name,
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					TrackDuration: track.Track.TimeDuration(),
 				})
 			}
+
+			mu.Lock()
+			orderedData[page] = data
+			mu.Unlock()
 		}(tracks)
 
 		if result.Next == "" {
@@ -182,6 +200,12 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData
 			return nil, fmt.Errorf("getting next page: %w", err)
 		}
 
+	}
+
+	for currentPage := range page + 1 {
+		if data, ok := orderedData[currentPage]; ok {
+			trackData = append(trackData, data...)
+		}
 	}
 
 	return &SpotifyData{
