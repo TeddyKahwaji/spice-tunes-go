@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tunes/internal/embeds"
-	"tunes/pkg/models"
+	"tunes/pkg/audiotype"
 	"tunes/pkg/spotify"
 	"tunes/pkg/util"
 	"tunes/pkg/youtube"
@@ -53,7 +53,7 @@ type track struct {
 }
 
 type TrackDataRetriever interface {
-	GetTracksData(audioType models.SupportedAudioType, query string) (*models.Data, error)
+	GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
 }
 
 type MusicCogConfig struct {
@@ -270,17 +270,17 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 
 	options := interaction.ApplicationCommandData().Options
 	query := options[0].Value.(string)
-	audioType, err := models.DetermineAudioType(query)
+	audioType, err := audiotype.DetermineAudioType(query)
 	if err != nil {
 		return fmt.Errorf("determining audio type: %w", err)
 	}
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 
-	var trackData *models.Data
-	if models.IsSpotify(audioType) {
+	var trackData *audiotype.Data
+	if audiotype.IsSpotify(audioType) {
 		trackData, err = m.retrieveTracks(audioType, query, m.spotifyClient)
-	} else if models.IsYoutube(audioType) {
+	} else if audiotype.IsYoutube(audioType) || audioType == audiotype.GenericSearch {
 		trackData, err = m.retrieveTracks(audioType, query, m.ytSearchWrapper)
 	}
 
@@ -297,9 +297,9 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	return nil
 }
 
-func (m *musicPlayerCog) retrieveTracks(audioType models.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*models.Data, error) {
+func (m *musicPlayerCog) retrieveTracks(audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
 	var (
-		trackData *models.Data
+		trackData *audiotype.Data
 		err       error
 	)
 
@@ -311,7 +311,7 @@ func (m *musicPlayerCog) retrieveTracks(audioType models.SupportedAudioType, que
 	return trackData, nil
 }
 
-func (m *musicPlayerCog) enqueueItems(guildPlayer *guildPlayer, trackData *models.Data) {
+func (m *musicPlayerCog) enqueueItems(guildPlayer *guildPlayer, trackData *audiotype.Data) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, track := range trackData.Tracks {

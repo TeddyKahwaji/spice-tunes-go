@@ -1,7 +1,8 @@
-package models
+package audiotype
 
 import (
 	"errors"
+	"net/url"
 	"regexp"
 )
 
@@ -26,6 +27,7 @@ const (
 	SpotifyAlbum       SupportedAudioType = "SpotifyAlbumAudio"
 	SoundCloudTrack    SupportedAudioType = "SoundCloud"
 	SoundCloudPlaylist SupportedAudioType = "SoundCloudPlaylistAudio"
+	GenericSearch      SupportedAudioType = "GenericSearchAudio"
 )
 
 const (
@@ -59,6 +61,11 @@ func DetermineAudioType(query string) (SupportedAudioType, error) {
 		}
 
 		return SoundCloudTrack, nil
+	}
+
+	// if input is not a URl assume it is a generic search
+	if u, err := url.Parse(query); err != nil || u.Scheme == "" || u.Host == "" {
+		return GenericSearch, nil
 	}
 
 	return "", ErrUnsupportedAudioType

@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"sync"
 
-	models "tunes/pkg/models"
+	"tunes/pkg/audiotype"
 
 	"github.com/zmb3/spotify"
 )
@@ -21,13 +21,13 @@ func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
 	}
 }
 
-func (s *SpotifyWrapper) GetTracksData(audioType models.SupportedAudioType, query string) (*models.Data, error) {
+func (s *SpotifyWrapper) GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
 	var (
-		result *models.Data
+		result *audiotype.Data
 		err    error
 	)
 
-	if audioType != models.SpotifyPlaylist && audioType != models.SpotifyTrack && audioType != models.SpotifyAlbum {
+	if audioType != audiotype.SpotifyPlaylist && audioType != audiotype.SpotifyTrack && audioType != audiotype.SpotifyAlbum {
 		return nil, errors.New("audio type provided is not from a spotify source")
 	}
 
@@ -37,13 +37,13 @@ func (s *SpotifyWrapper) GetTracksData(audioType models.SupportedAudioType, quer
 	}
 
 	switch audioType {
-	case models.SpotifyPlaylist:
+	case audiotype.SpotifyPlaylist:
 		result, err = s.handlePlaylistData(spotifyTrackID)
 
-	case models.SpotifyAlbum:
+	case audiotype.SpotifyAlbum:
 		result, err = s.handleAlbumData(spotifyTrackID)
 
-	case models.SpotifyTrack:
+	case audiotype.SpotifyTrack:
 		result, err = s.handleSingleTrackData(spotifyTrackID)
 	}
 
@@ -54,28 +54,28 @@ func (s *SpotifyWrapper) GetTracksData(audioType models.SupportedAudioType, quer
 	return result, err
 }
 
-func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*models.Data, error) {
-	trackData := make([]models.TrackData, 1)
+func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*audiotype.Data, error) {
+	trackData := make([]audiotype.TrackData, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
 	if err != nil {
 		return nil, fmt.Errorf("getting track data: %w", err)
 	}
 
-	trackData = append(trackData, models.TrackData{
+	trackData = append(trackData, audiotype.TrackData{
 		TrackName:     track.Name,
 		TrackImageURL: track.Album.Images[0].URL,
 		Query:         "ytsearch1:" + track.Name,
 	})
 
-	return &models.Data{
+	return &audiotype.Data{
 		Tracks: trackData,
-		Type:   models.SpotifyTrack,
+		Type:   audiotype.SpotifyTrack,
 	}, nil
 }
 
-func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, error) {
-	trackData := []models.TrackData{}
+func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*audiotype.Data, error) {
+	trackData := []audiotype.TrackData{}
 
 	var (
 		wg sync.WaitGroup
@@ -87,7 +87,7 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, e
 		return nil, fmt.Errorf("getting album track items: %w", err)
 	}
 
-	orderedData := make(map[int][]models.TrackData)
+	orderedData := make(map[int][]audiotype.TrackData)
 
 	page := 0
 	for ; ; page++ {
@@ -96,10 +96,10 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, e
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
 
-			data := make([]models.TrackData, 0, len(tracks))
+			data := make([]audiotype.TrackData, 0, len(tracks))
 			for _, track := range tracks {
 				fullTrackName := track.Name + " - " + track.Artists[0].Name
-				data = append(data, models.TrackData{
+				data = append(data, audiotype.TrackData{
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
 					TrackImageURL: result.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
@@ -129,14 +129,14 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, e
 		}
 	}
 
-	return &models.Data{
+	return &audiotype.Data{
 		Tracks: trackData,
-		Type:   models.SpotifyAlbum,
+		Type:   audiotype.SpotifyAlbum,
 	}, nil
 }
 
-func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data, error) {
-	trackData := []models.TrackData{}
+func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*audiotype.Data, error) {
+	trackData := []audiotype.TrackData{}
 
 	var (
 		wg     sync.WaitGroup
@@ -153,7 +153,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
 
-	orderedData := make(map[int][]models.TrackData)
+	orderedData := make(map[int][]audiotype.TrackData)
 
 	page := 0
 	for ; ; page++ {
@@ -163,10 +163,10 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data
 		go func(tracks []spotify.PlaylistTrack) {
 			defer wg.Done()
 
-			data := make([]models.TrackData, 0, len(tracks))
+			data := make([]audiotype.TrackData, 0, len(tracks))
 			for _, track := range tracks {
 				fullTrackName := track.Track.Name + " - " + track.Track.Artists[0].Name
-				data = append(data, models.TrackData{
+				data = append(data, audiotype.TrackData{
 					TrackName:     fullTrackName,
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
@@ -196,31 +196,31 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data
 		}
 	}
 
-	return &models.Data{
+	return &audiotype.Data{
 		Tracks: trackData,
-		Type:   models.SpotifyPlaylist,
+		Type:   audiotype.SpotifyPlaylist,
 	}, nil
 }
 
-func extractSpotifyID(audioType models.SupportedAudioType, spotifyURL string) (string, error) {
-	playlistRegex := regexp.MustCompile(models.SpotifyPlaylistRegex)
-	singleTrackRegex := regexp.MustCompile(models.SpotifyTrackRegex)
-	albumRegex := regexp.MustCompile(models.SpotifyAlbumRegex)
+func extractSpotifyID(audioType audiotype.SupportedAudioType, spotifyURL string) (string, error) {
+	playlistRegex := regexp.MustCompile(audiotype.SpotifyPlaylistRegex)
+	singleTrackRegex := regexp.MustCompile(audiotype.SpotifyTrackRegex)
+	albumRegex := regexp.MustCompile(audiotype.SpotifyAlbumRegex)
 
 	switch audioType {
-	case models.SpotifyPlaylist:
+	case audiotype.SpotifyPlaylist:
 		matches := playlistRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 
-	case models.SpotifyAlbum:
+	case audiotype.SpotifyAlbum:
 		matches := albumRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 
-	case models.SpotifyTrack:
+	case audiotype.SpotifyTrack:
 		matches := singleTrackRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil

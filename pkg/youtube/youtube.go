@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"sync"
 
-	"tunes/pkg/models"
+	"tunes/pkg/audiotype"
 
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
@@ -20,6 +20,7 @@ const (
 type YoutubeSearchWrapper struct {
 	ytPlaylistService *youtube.PlaylistItemsService
 	ytVideoService    *youtube.VideosService
+	ytSearchService   *youtube.SearchService
 }
 
 func NewYoutubeSearchWrapper(ctx context.Context, apiKey string) (*YoutubeSearchWrapper, error) {
@@ -30,24 +31,26 @@ func NewYoutubeSearchWrapper(ctx context.Context, apiKey string) (*YoutubeSearch
 
 	ytPlaylistService := youtube.NewPlaylistItemsService(service)
 	ytVideoService := youtube.NewVideosService(service)
+	ytSearchService := youtube.NewSearchService(service)
 
 	return &YoutubeSearchWrapper{
 		ytPlaylistService: ytPlaylistService,
 		ytVideoService:    ytVideoService,
+		ytSearchService:   ytSearchService,
 	}, nil
 }
 
-func extractYoutubeID(audioType models.SupportedAudioType, fullURL string) (string, error) {
+func extractYoutubeID(audioType audiotype.SupportedAudioType, fullURL string) (string, error) {
 	playlistRegex := regexp.MustCompile(`[?&]list=([a-zA-Z0-9_-]+)`)
 	singleVideoRegex := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^?&\n]{11})`)
 
 	switch audioType {
-	case models.YoutubePlaylist:
+	case audiotype.YoutubePlaylist:
 		matches := playlistRegex.FindStringSubmatch(fullURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
-	case models.YoutubeSong:
+	case audiotype.YoutubeSong:
 		matches := singleVideoRegex.FindStringSubmatch(fullURL)
 		if len(matches) > 1 {
 			return matches[1], nil
@@ -58,22 +61,26 @@ func extractYoutubeID(audioType models.SupportedAudioType, fullURL string) (stri
 }
 
 // TODO: Add context timeouts
-func (yt *YoutubeSearchWrapper) GetTracksData(audioType models.SupportedAudioType, query string) (*models.Data, error) {
+func (yt *YoutubeSearchWrapper) GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
 	var (
-		trackData *models.Data
+		trackData *audiotype.Data
 		err       error
 	)
 
-	youtubeID, err := extractYoutubeID(audioType, query)
-	if err != nil {
-		return nil, fmt.Errorf("extracting youtube ID: %w", err)
-	}
+	if audioType == audiotype.GenericSearch {
+		trackData, err = yt.handleGenericSearch(query)
+	} else {
+		youtubeID, err := extractYoutubeID(audioType, query)
+		if err != nil {
+			return nil, fmt.Errorf("extracting youtube ID: %w", err)
+		}
 
-	switch audioType {
-	case models.YoutubePlaylist:
-		trackData, err = yt.handlePlaylist(youtubeID)
-	case models.YoutubeSong:
-		trackData, err = yt.handleSingleTrack(youtubeID)
+		switch audioType {
+		case audiotype.YoutubePlaylist:
+			trackData, err = yt.handlePlaylist(youtubeID)
+		case audiotype.YoutubeSong:
+			trackData, err = yt.handleSingleTrack(youtubeID)
+		}
 	}
 
 	if err != nil {
@@ -83,7 +90,7 @@ func (yt *YoutubeSearchWrapper) GetTracksData(audioType models.SupportedAudioTyp
 	return trackData, nil
 }
 
-func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*models.Data, error) {
+func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*audiotype.Data, error) {
 	resp, err := yt.ytVideoService.List([]string{"snippet", "contentDetails"}).
 		Id(ID).
 		MaxResults(1).
@@ -92,10 +99,10 @@ func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*models.Data, erro
 		return nil, fmt.Errorf("requesting single video: %w", err)
 	}
 
-	trackData := make([]models.TrackData, 0, 1)
+	trackData := make([]audiotype.TrackData, 0, 1)
 
 	if len(resp.Items) == 0 {
-		return nil, models.ErrSearchQueryNotFound
+		return nil, audiotype.ErrSearchQueryNotFound
 	}
 
 	item := resp.Items[0]
@@ -110,24 +117,67 @@ func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*models.Data, erro
 		}
 	}
 
-	trackData = append(trackData, models.TrackData{
+	trackData = append(trackData, audiotype.TrackData{
 		TrackImageURL: thumbnailURL,
 		TrackName:     item.Snippet.Title,
 		Query:         YoutubeVideoBase + ID,
 	})
 
-	return &models.Data{
+	return &audiotype.Data{
 		Tracks: trackData,
-		Type:   models.YoutubeSong,
+		Type:   audiotype.YoutubeSong,
 	}, nil
 }
 
-func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*models.Data, error) {
+func (yt *YoutubeSearchWrapper) handleGenericSearch(query string) (*audiotype.Data, error) {
+	resp, err := yt.ytSearchService.List([]string{"snippet"}).
+		Q(query).
+		MaxResults(1).
+		Do()
+	if err != nil {
+		return nil, fmt.Errorf("searching youtube query: %w", err)
+	}
+
+	if len(resp.Items) == 0 {
+		return nil, audiotype.ErrSearchQueryNotFound
+	}
+
+	trackData := make([]audiotype.TrackData, 0, 1)
+
+	if len(resp.Items) == 0 {
+		return nil, audiotype.ErrSearchQueryNotFound
+	}
+
+	item := resp.Items[0]
+
+	var thumbnailURL string
+
+	if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
+		if maxRes := thumbnails.Maxres; maxRes != nil {
+			thumbnailURL = maxRes.Url
+		} else if highRes := thumbnails.High; highRes != nil {
+			thumbnailURL = highRes.Url
+		}
+	}
+
+	trackData = append(trackData, audiotype.TrackData{
+		TrackImageURL: thumbnailURL,
+		TrackName:     item.Snippet.Title,
+		Query:         YoutubeVideoBase + item.Id.VideoId,
+	})
+
+	return &audiotype.Data{
+		Tracks: trackData,
+		Type:   audiotype.GenericSearch,
+	}, nil
+}
+
+func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*audiotype.Data, error) {
 	req := yt.ytPlaylistService.List([]string{"snippet", "contentDetails"}).
 		PlaylistId(ID).
 		MaxResults(100)
 
-	trackData := []models.TrackData{}
+	trackData := []audiotype.TrackData{}
 
 	var (
 		mu sync.Mutex
@@ -142,14 +192,14 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*models.Data, error) 
 
 		items := resp.Items
 		if len(items) == 0 {
-			return nil, models.ErrSearchQueryNotFound
+			return nil, audiotype.ErrSearchQueryNotFound
 		}
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for _, item := range items {
-				data := models.TrackData{}
+				data := audiotype.TrackData{}
 				videoID := item.Snippet.ResourceId.VideoId
 				if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
 					var thumbnailURL string
@@ -184,8 +234,8 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*models.Data, error) 
 
 	wg.Wait()
 
-	return &models.Data{
+	return &audiotype.Data{
 		Tracks: trackData,
-		Type:   models.YoutubePlaylist,
+		Type:   audiotype.YoutubePlaylist,
 	}, nil
 }
