@@ -51,6 +51,10 @@ func (s *SpotifyWrapper) GetTracksData(audioType audiotype.SupportedAudioType, q
 		return nil, fmt.Errorf("error getting track data: %w", err)
 	}
 
+	if len(result.Tracks) == 0 {
+		return nil, audiotype.ErrSearchQueryNotFound
+	}
+
 	return result, err
 }
 

@@ -286,6 +286,23 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	}
 
 	if err != nil {
+		if errors.Is(err, audiotype.ErrSearchQueryNotFound) {
+			_, err := session.FollowupMessageCreate(interaction.Interaction, false, &discordgo.WebhookParams{
+				Embeds: []*discordgo.MessageEmbed{embeds.NotFoundEmbed()},
+			})
+			if err != nil {
+				return fmt.Errorf("sending follow up message: %w", err)
+			}
+
+			message, err := session.InteractionResponse(interaction.Interaction)
+			if err != nil {
+				return err
+			}
+
+			_ = util.DeleteMessageAfterTime(session, interaction.ChannelID, message.ID, 10*time.Second)
+			return nil
+		}
+
 		return err
 	}
 
@@ -320,7 +337,6 @@ func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discor
 			}
 		}
 	}
-
 }
 
 func (m *musicPlayerCog) retrieveTracks(audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {

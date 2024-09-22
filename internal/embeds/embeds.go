@@ -12,3 +12,14 @@ func ErrorMessageEmbed(msg string) *discordgo.MessageEmbed {
 		},
 	}
 }
+
+func NotFoundEmbed() *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       "Search Query Has No Results",
+		Description: "Sorry, I couldn't find any results for your search.\n\nPlease provide a direct `YouTube` or `Spotify` link.",
+		Color:       0xd5a7b4,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: "https://media.giphy.com/media/piL4e4WusrA4S0KODK/giphy.gif",
+		},
+	}
+}
