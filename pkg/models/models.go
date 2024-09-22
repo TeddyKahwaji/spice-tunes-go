@@ -3,9 +3,22 @@ package models
 import (
 	"errors"
 	"regexp"
+	"time"
 )
 
 type SupportedAudioType string
+
+type TrackData struct {
+	TrackName     string
+	TrackImageURL string
+	TrackDuration time.Duration
+	Query         string
+}
+
+type Data struct {
+	Tracks []TrackData
+	Type   SupportedAudioType
+}
 
 const (
 	YoutubeSong        SupportedAudioType = "YoutubeSongAudio"
@@ -53,4 +66,9 @@ func DetermineAudioType(query string) (SupportedAudioType, error) {
 // Audio type is a playlist
 func IsMultiTrackType(audioType SupportedAudioType) bool {
 	return audioType == SpotifyPlaylist || audioType == SpotifyAlbum
+}
+
+// Source type is a spotify type
+func IsSpotify(audioType SupportedAudioType) bool {
+	return audioType == SpotifyAlbum || audioType == SpotifyPlaylist || audioType == SpotifyTrack
 }

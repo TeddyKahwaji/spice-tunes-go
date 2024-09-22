@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sync"
-	"time"
 
 	models "tunes/pkg/models"
 
@@ -16,26 +15,15 @@ type SpotifyWrapper struct {
 	client *spotify.Client
 }
 
-type TrackData struct {
-	TrackName     string
-	TrackImageURL string
-	TrackDuration time.Duration
-}
-
-type Data struct {
-	Tracks []TrackData
-	Type   models.SupportedAudioType
-}
-
 func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
 	return &SpotifyWrapper{
 		client: client,
 	}
 }
 
-func (s *SpotifyWrapper) GetTracksData(query string) (*Data, error) {
+func (s *SpotifyWrapper) GetTracksData(query string) (*models.Data, error) {
 	var (
-		result *Data
+		result *models.Data
 		err    error
 	)
 
@@ -68,28 +56,29 @@ func (s *SpotifyWrapper) GetTracksData(query string) (*Data, error) {
 	return result, err
 }
 
-func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*Data, error) {
-	trackData := make([]TrackData, 1)
+func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*models.Data, error) {
+	trackData := make([]models.TrackData, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
 	if err != nil {
 		return nil, fmt.Errorf("getting track data: %w", err)
 	}
 
-	trackData = append(trackData, TrackData{
+	trackData = append(trackData, models.TrackData{
 		TrackName:     track.Name,
 		TrackImageURL: track.Album.Images[0].URL,
 		TrackDuration: track.TimeDuration(),
+		Query:         "ytsearch1:" + track.Name,
 	})
 
-	return &Data{
+	return &models.Data{
 		Tracks: trackData,
 		Type:   models.SpotifyTrack,
 	}, nil
 }
 
-func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*Data, error) {
-	trackData := []TrackData{}
+func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, error) {
+	trackData := []models.TrackData{}
 
 	var (
 		wg sync.WaitGroup
@@ -101,7 +90,7 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*Data, error) {
 		return nil, fmt.Errorf("getting album track items: %w", err)
 	}
 
-	orderedData := make(map[int][]TrackData)
+	orderedData := make(map[int][]models.TrackData)
 
 	page := 0
 	for ; ; page++ {
@@ -111,12 +100,14 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*Data, error) {
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
 
-			data := make([]TrackData, 0, len(tracks))
+			data := make([]models.TrackData, 0, len(tracks))
 			for _, track := range tracks {
-				data = append(data, TrackData{
+				fullTrackName := track.Name + " - " + track.Artists[0].Name
+				data = append(data, models.TrackData{
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
 					TrackImageURL: result.Images[0].URL,
 					TrackDuration: track.TimeDuration(),
+					Query:         "ytsearch1:" + fullTrackName,
 				})
 			}
 
@@ -142,14 +133,14 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*Data, error) {
 		}
 	}
 
-	return &Data{
+	return &models.Data{
 		Tracks: trackData,
 		Type:   models.SpotifyAlbum,
 	}, nil
 }
 
-func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*Data, error) {
-	trackData := []TrackData{}
+func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data, error) {
+	trackData := []models.TrackData{}
 
 	var (
 		wg     sync.WaitGroup
@@ -166,7 +157,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*Data, error
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
 
-	orderedData := make(map[int][]TrackData)
+	orderedData := make(map[int][]models.TrackData)
 
 	page := 0
 	for ; ; page++ {
@@ -176,12 +167,14 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*Data, error
 		go func(tracks []spotify.PlaylistTrack) {
 			defer wg.Done()
 
-			data := make([]TrackData, 0, len(tracks))
+			data := make([]models.TrackData, 0, len(tracks))
 			for _, track := range tracks {
-				data = append(data, TrackData{
-					TrackName:     track.Track.Name + " - " + track.Track.Artists[0].Name,
+				fullTrackName := track.Track.Name + " - " + track.Track.Artists[0].Name
+				data = append(data, models.TrackData{
+					TrackName:     fullTrackName,
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					TrackDuration: track.Track.TimeDuration(),
+					Query:         "ytsearch1:" + fullTrackName,
 				})
 			}
 
@@ -207,7 +200,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*Data, error
 		}
 	}
 
-	return &Data{
+	return &models.Data{
 		Tracks: trackData,
 		Type:   models.SpotifyPlaylist,
 	}, nil

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"tunes/internal/embeds"
+	"tunes/pkg/models"
 	"tunes/pkg/spotify"
 	"tunes/pkg/util"
 
@@ -97,7 +98,6 @@ func (m *musicPlayerCog) globalPlay() {
 
 func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
 	result, err := goutubedl.New(ctx, audioTrackName, goutubedl.Options{
-		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 	})
 	if err != nil {
@@ -107,6 +107,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 	downloadResult, err := result.DownloadWithOptions(ctx, goutubedl.DownloadOptions{
 		Filter:            "best",
 		DownloadAudioOnly: true,
+		PlaylistIndex:     1,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("downloading youtube data: %w", err)
@@ -240,22 +241,49 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 
 	options := interaction.ApplicationCommandData().Options
 	query := options[0].Value.(string)
-	// audioType, err := models.DetermineAudioType(query)
-	// if err != nil {
-	// 	return fmt.Errorf("determining audio type: %w", err)
-	// }
+	audioType, err := models.DetermineAudioType(query)
+	if err != nil {
+		return fmt.Errorf("determining audio type: %w", err)
+	}
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
+	trackData, err := m.retrieveTracks(query, audioType)
+	if err != nil {
+		return err
+	}
 
-	m.mu.Lock()
-	guildPlayer.queue = append(guildPlayer.queue, query)
-	defer m.mu.Unlock()
+	m.enqueueItems(guildPlayer, trackData)
 
 	if guildPlayer.voiceState == NotPlaying {
 		m.songSignal <- guildPlayer
 	}
 
 	return nil
+}
+
+func (m *musicPlayerCog) retrieveTracks(query string, audioType models.SupportedAudioType) (*models.Data, error) {
+	var (
+		trackData *models.Data
+		err       error
+	)
+
+	if models.IsSpotify(audioType) {
+		trackData, err = m.spotifyClient.GetTracksData(query)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("retrieving tracks: %w", err)
+	}
+
+	return trackData, nil
+}
+
+func (m *musicPlayerCog) enqueueItems(guildPlayer *guildPlayer, trackData *models.Data) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, track := range trackData.Tracks {
+		guildPlayer.queue = append(guildPlayer.queue, track.Query)
+	}
 }
 
 func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
