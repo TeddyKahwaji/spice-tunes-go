@@ -50,6 +50,7 @@ func (s *SpotifyWrapper) GetTracksData(audioType models.SupportedAudioType, quer
 	if err != nil {
 		return nil, fmt.Errorf("error getting track data: %w", err)
 	}
+
 	return result, err
 }
 
@@ -112,6 +113,7 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, e
 
 		if result.Tracks.Next == "" {
 			wg.Wait()
+
 			break
 		}
 
@@ -178,6 +180,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data
 
 		if result.Next == "" {
 			wg.Wait()
+
 			break
 		}
 

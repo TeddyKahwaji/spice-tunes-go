@@ -13,6 +13,10 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+const (
+	YoutubeVideoBase = "https://www.youtube.com/watch?v="
+)
+
 type YoutubeSearchWrapper struct {
 	ytPlaylistService *youtube.PlaylistItemsService
 	ytVideoService    *youtube.VideosService
@@ -35,10 +39,16 @@ func NewYoutubeSearchWrapper(ctx context.Context, apiKey string) (*YoutubeSearch
 
 func extractYoutubeID(audioType models.SupportedAudioType, fullURL string) (string, error) {
 	playlistRegex := regexp.MustCompile(`[?&]list=([a-zA-Z0-9_-]+)`)
+	singleVideoRegex := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^?&\n]{11})`)
 
 	switch audioType {
 	case models.YoutubePlaylist:
 		matches := playlistRegex.FindStringSubmatch(fullURL)
+		if len(matches) > 1 {
+			return matches[1], nil
+		}
+	case models.YoutubeSong:
+		matches := singleVideoRegex.FindStringSubmatch(fullURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
@@ -74,7 +84,42 @@ func (yt *YoutubeSearchWrapper) GetTracksData(audioType models.SupportedAudioTyp
 }
 
 func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*models.Data, error) {
-	return nil, nil
+	resp, err := yt.ytVideoService.List([]string{"snippet", "contentDetails"}).
+		Id(ID).
+		MaxResults(1).
+		Do()
+	if err != nil {
+		return nil, fmt.Errorf("requesting single video: %w", err)
+	}
+
+	trackData := make([]models.TrackData, 0, 1)
+
+	if len(resp.Items) == 0 {
+		return nil, models.ErrSearchQueryNotFound
+	}
+
+	item := resp.Items[0]
+
+	var thumbnailURL string
+
+	if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
+		if maxRes := thumbnails.Maxres; maxRes != nil {
+			thumbnailURL = maxRes.Url
+		} else if highRes := thumbnails.High; highRes != nil {
+			thumbnailURL = highRes.Url
+		}
+	}
+
+	trackData = append(trackData, models.TrackData{
+		TrackImageURL: thumbnailURL,
+		TrackName:     item.Snippet.Title,
+		Query:         YoutubeVideoBase + ID,
+	})
+
+	return &models.Data{
+		Tracks: trackData,
+		Type:   models.YoutubeSong,
+	}, nil
 }
 
 func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*models.Data, error) {
@@ -95,8 +140,12 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*models.Data, error) 
 			return nil, fmt.Errorf("requesting playlist page: %w", err)
 		}
 
-		wg.Add(1)
 		items := resp.Items
+		if len(items) == 0 {
+			return nil, models.ErrSearchQueryNotFound
+		}
+
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for _, item := range items {
@@ -113,7 +162,7 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*models.Data, error) 
 					data.TrackImageURL = thumbnailURL
 				}
 
-				fullURL := "https://www.youtube.com/watch?v=" + videoID
+				fullURL := YoutubeVideoBase + videoID
 				title := item.Snippet.Title
 				data.TrackName = title
 				data.Query = fullURL
