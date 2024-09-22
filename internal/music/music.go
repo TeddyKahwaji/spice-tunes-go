@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"tunes/internal/embeds"
 	"tunes/pkg/models"
 	"tunes/pkg/spotify"
 	"tunes/pkg/util"
+	"tunes/pkg/youtube"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
@@ -42,16 +44,41 @@ type musicPlayerCog struct {
 	songSignal       chan *guildPlayer
 	guildVoiceStates map[string]*guildPlayer
 	spotifyClient    *spotify.SpotifyWrapper
+	ytSearchWrapper  *youtube.YoutubeSearchWrapper
 }
 
-func NewMusicPlayerCog(logger *zap.Logger, httpClient *http.Client, spotifyWrapper *spotify.SpotifyWrapper) (*musicPlayerCog, error) {
+type track struct {
+	file     *os.File
+	duration time.Duration
+}
+
+type TrackDataRetriever interface {
+	GetTracksData(audioType models.SupportedAudioType, query string) (*models.Data, error)
+}
+
+type MusicCogConfig struct {
+	Logger               *zap.Logger
+	HttpClient           *http.Client
+	SpotifyWrapper       *spotify.SpotifyWrapper
+	YoutubeSearchWrapper *youtube.YoutubeSearchWrapper
+}
+
+func NewMusicPlayerCog(config *MusicCogConfig) (*musicPlayerCog, error) {
+	if config.Logger == nil ||
+		config.HttpClient == nil ||
+		config.SpotifyWrapper == nil ||
+		config.YoutubeSearchWrapper == nil {
+		return nil, errors.New("config was populated with nil value")
+	}
+
 	songSignals := make(chan *guildPlayer)
 	musicCog := &musicPlayerCog{
-		httpClient:       httpClient,
-		logger:           logger,
+		httpClient:       config.HttpClient,
+		logger:           config.Logger,
 		songSignal:       songSignals,
 		guildVoiceStates: make(map[string]*guildPlayer),
-		spotifyClient:    spotifyWrapper,
+		spotifyClient:    config.SpotifyWrapper,
+		ytSearchWrapper:  config.YoutubeSearchWrapper,
 	}
 
 	go musicCog.globalPlay()
@@ -96,8 +123,9 @@ func (m *musicPlayerCog) globalPlay() {
 	}
 }
 
-func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
+func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*track, error) {
 	result, err := goutubedl.New(ctx, audioTrackName, goutubedl.Options{
+		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 	})
 	if err != nil {
@@ -107,7 +135,6 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 	downloadResult, err := result.DownloadWithOptions(ctx, goutubedl.DownloadOptions{
 		Filter:            "best",
 		DownloadAudioOnly: true,
-		PlaylistIndex:     1,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("downloading youtube data: %w", err)
@@ -124,7 +151,10 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 		return nil, fmt.Errorf("error downloading youtube content to temporary file: %w", err)
 	}
 
-	return file, nil
+	return &track{
+		file:     file,
+		duration: time.Duration(result.Info.Duration),
+	}, nil
 }
 
 func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
@@ -140,22 +170,21 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 
 	ctx := context.Background()
 
-	file, err := m.downloadTrack(ctx, audioTrackName)
+	track, err := m.downloadTrack(ctx, audioTrackName)
 	if err != nil {
 		return fmt.Errorf("downloading track: %w", err)
 	}
 
-	audioPath := file.Name()
+	file := track.file
+	filePath := track.file.Name()
 
 	defer func() {
 		if err := file.Close(); err != nil {
 			m.logger.Warn("could not close file", zap.Error(err), zap.String("file_name", file.Name()))
 		}
-	}()
 
-	defer func() {
-		if err := util.DeleteFile(audioPath); err != nil {
-			m.logger.Warn("could not delete file", zap.Error(err), zap.String("file_name", audioPath))
+		if err := util.DeleteFile(filePath); err != nil {
+			m.logger.Warn("could not delete file", zap.Error(err), zap.String("file_name", filePath))
 		}
 	}()
 
@@ -163,7 +192,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	opts.RawOutput = true
 	opts.Bitrate = 128
 
-	encodingStream, err := dca.EncodeFile(audioPath, opts)
+	encodingStream, err := dca.EncodeFile(filePath, opts)
 	if err != nil {
 		return fmt.Errorf("encoding file: %w", err)
 	}
@@ -183,7 +212,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 					guildPlayer.voiceState = NotPlaying
 				}
 
-				if err := util.DeleteFile(audioPath); err != nil {
+				if err := util.DeleteFile(filePath); err != nil {
 					m.logger.Warn("could not delete file", zap.Error(err))
 				}
 			} else {
@@ -247,7 +276,14 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	}
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
-	trackData, err := m.retrieveTracks(query, audioType)
+
+	var trackData *models.Data
+	if models.IsSpotify(audioType) {
+		trackData, err = m.retrieveTracks(audioType, query, m.spotifyClient)
+	} else if models.IsYoutube(audioType) {
+		trackData, err = m.retrieveTracks(audioType, query, m.ytSearchWrapper)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -261,16 +297,13 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	return nil
 }
 
-func (m *musicPlayerCog) retrieveTracks(query string, audioType models.SupportedAudioType) (*models.Data, error) {
+func (m *musicPlayerCog) retrieveTracks(audioType models.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*models.Data, error) {
 	var (
 		trackData *models.Data
 		err       error
 	)
 
-	if models.IsSpotify(audioType) {
-		trackData, err = m.spotifyClient.GetTracksData(query)
-	}
-
+	trackData, err = trackRetriever.GetTracksData(audioType, query)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving tracks: %w", err)
 	}

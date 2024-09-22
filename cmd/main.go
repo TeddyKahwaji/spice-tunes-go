@@ -11,6 +11,7 @@ import (
 
 	"tunes/internal/music"
 	sw "tunes/pkg/spotify"
+	"tunes/pkg/youtube"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/zmb3/spotify"
@@ -83,13 +84,23 @@ func main() {
 
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
-
+	youtubeAPIKey := os.Getenv("YOUTUBE_API_KEY")
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
 		ctx := context.Background()
-
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
+		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, youtubeAPIKey)
+		if err != nil {
+			logger.Fatal("unable to instantiate youtubeWrapperClient", zap.Error(err))
+		}
 
-		musicPlayerCog, err := music.NewMusicPlayerCog(logger, &httpClient, spotifyWrapper)
+		musicCogConfig := &music.MusicCogConfig{
+			HttpClient:           &httpClient,
+			SpotifyWrapper:       spotifyWrapper,
+			Logger:               logger,
+			YoutubeSearchWrapper: youtubeSearchWrapper,
+		}
+
+		musicPlayerCog, err := music.NewMusicPlayerCog(musicCogConfig)
 		if err != nil {
 			logger.Fatal("unable to instantiate greeter cog", zap.Error(err))
 		}

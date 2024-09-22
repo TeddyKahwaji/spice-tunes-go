@@ -3,7 +3,6 @@ package models
 import (
 	"errors"
 	"regexp"
-	"time"
 )
 
 type SupportedAudioType string
@@ -11,7 +10,6 @@ type SupportedAudioType string
 type TrackData struct {
 	TrackName     string
 	TrackImageURL string
-	TrackDuration time.Duration
 	Query         string
 }
 
@@ -39,13 +37,16 @@ const (
 	SoundCloudRegex      = `^https?:\/\/(soundcloud\.com|snd\.sc)\/(.*)$`
 )
 
-var ErrUnsupportedAudioType = errors.New("search query provided is not a supported audio type")
+var (
+	ErrUnsupportedAudioType = errors.New("search query provided is not a supported audio type")
+	ErrSearchQueryNotFound  = errors.New("search query could not be resolved")
+)
 
 func DetermineAudioType(query string) (SupportedAudioType, error) {
-	if matched, _ := regexp.MatchString(YoutubeVideoRegex, query); matched {
-		return YoutubeSong, nil
-	} else if matched, _ := regexp.MatchString(YoutubePlaylistRegex, query); matched {
+	if matched, _ := regexp.MatchString(YoutubePlaylistRegex, query); matched {
 		return YoutubePlaylist, nil
+	} else if matched, _ := regexp.MatchString(YoutubeVideoRegex, query); matched {
+		return YoutubeSong, nil
 	} else if matched, _ := regexp.MatchString(SpotifyPlaylistRegex, query); matched {
 		return SpotifyPlaylist, nil
 	} else if matched, _ := regexp.MatchString(SpotifyAlbumRegex, query); matched {
@@ -68,7 +69,10 @@ func IsMultiTrackType(audioType SupportedAudioType) bool {
 	return audioType == SpotifyPlaylist || audioType == SpotifyAlbum
 }
 
-// Source type is a spotify type
 func IsSpotify(audioType SupportedAudioType) bool {
 	return audioType == SpotifyAlbum || audioType == SpotifyPlaylist || audioType == SpotifyTrack
+}
+
+func IsYoutube(audioType SupportedAudioType) bool {
+	return audioType == YoutubePlaylist || audioType == YoutubeSong
 }

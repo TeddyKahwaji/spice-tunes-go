@@ -21,16 +21,13 @@ func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
 	}
 }
 
-func (s *SpotifyWrapper) GetTracksData(query string) (*models.Data, error) {
+func (s *SpotifyWrapper) GetTracksData(audioType models.SupportedAudioType, query string) (*models.Data, error) {
 	var (
 		result *models.Data
 		err    error
 	)
 
-	audioType, err := models.DetermineAudioType(query)
-	if err != nil {
-		return nil, fmt.Errorf("determining audio type: %w", err)
-	} else if audioType != models.SpotifyPlaylist && audioType != models.SpotifyTrack && audioType != models.SpotifyAlbum {
+	if audioType != models.SpotifyPlaylist && audioType != models.SpotifyTrack && audioType != models.SpotifyAlbum {
 		return nil, errors.New("audio type provided is not from a spotify source")
 	}
 
@@ -67,7 +64,6 @@ func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*models.D
 	trackData = append(trackData, models.TrackData{
 		TrackName:     track.Name,
 		TrackImageURL: track.Album.Images[0].URL,
-		TrackDuration: track.TimeDuration(),
 		Query:         "ytsearch1:" + track.Name,
 	})
 
@@ -95,7 +91,6 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, e
 	page := 0
 	for ; ; page++ {
 		tracks := result.Tracks.Tracks
-
 		wg.Add(1)
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
@@ -106,7 +101,6 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*models.Data, e
 				data = append(data, models.TrackData{
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
 					TrackImageURL: result.Images[0].URL,
-					TrackDuration: track.TimeDuration(),
 					Query:         "ytsearch1:" + fullTrackName,
 				})
 			}
@@ -152,7 +146,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data
 	result, err := s.client.GetPlaylistTracksOpt(spotify.ID(spotifyTrackID), &spotify.Options{
 		Offset: &offset,
 		Limit:  &limit,
-	}, "items(track(name,href,album,artists,duration_ms(name,href,images))), next")
+	}, "items(track(name,href,album,artists(name,href,images))), next")
 	if err != nil {
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
@@ -173,7 +167,6 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*models.Data
 				data = append(data, models.TrackData{
 					TrackName:     fullTrackName,
 					TrackImageURL: track.Track.Album.Images[0].URL,
-					TrackDuration: track.Track.TimeDuration(),
 					Query:         "ytsearch1:" + fullTrackName,
 				})
 			}
@@ -232,5 +225,5 @@ func extractSpotifyID(audioType models.SupportedAudioType, spotifyURL string) (s
 
 	}
 
-	return "", errors.New("error could not find playlistID")
+	return "", errors.New("error could not extract any ID")
 }
