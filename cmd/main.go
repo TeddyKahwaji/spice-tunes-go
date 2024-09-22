@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
+
 	"tunes/internal/music"
+	sw "tunes/pkg/spotify"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/zmb3/spotify"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 func getLogger(env string) *zap.Logger {
@@ -32,6 +37,19 @@ func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Sess
 	return bot, nil
 }
 
+func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret string) *sw.SpotifyWrapper {
+	config := &clientcredentials.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		TokenURL:     spotify.TokenURL,
+	}
+
+	tokenClient := config.Client(ctx)
+	client := spotify.NewClient(tokenClient)
+
+	return sw.NewSpotifyWrapper(&client)
+}
+
 func main() {
 	env := os.Getenv("ENV")
 	logger := getLogger(env)
@@ -43,9 +61,10 @@ func main() {
 	}()
 
 	discordToken := os.Getenv("SPICE_TUNES_DISCORD_TOKEN")
+	httpTimeout := time.Second * 5
 
 	httpClient := http.Client{
-		Timeout: time.Second * 5,
+		Timeout: httpTimeout,
 	}
 
 	bot, err := newDiscordBotClient(discordToken, &httpClient)
@@ -54,7 +73,6 @@ func main() {
 	}
 
 	bot.Identify.Intents = discordgo.IntentsGuildMembers | discordgo.IntentsAllWithoutPrivileged
-
 	bot.StateEnabled = true
 	bot.Identify.Presence = discordgo.GatewayStatusUpdate{
 		Game: discordgo.Activity{
@@ -63,8 +81,15 @@ func main() {
 		},
 	}
 
+	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
-		musicPlayerCog, err := music.NewMusicPlayerCog(logger, &httpClient)
+		ctx := context.Background()
+
+		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
+
+		musicPlayerCog, err := music.NewMusicPlayerCog(logger, &httpClient, spotifyWrapper)
 		if err != nil {
 			logger.Fatal("unable to instantiate greeter cog", zap.Error(err))
 		}

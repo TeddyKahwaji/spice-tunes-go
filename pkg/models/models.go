@@ -1,4 +1,4 @@
-package music
+package models
 
 import (
 	"errors"
@@ -26,9 +26,7 @@ const (
 	SoundCloudRegex      = `^https?:\/\/(soundcloud\.com|snd\.sc)\/(.*)$`
 )
 
-var (
-	UnsupportedAudioTypeErr = errors.New("search query provided is not a supported audio type")
-)
+var UnsupportedAudioTypeErr = errors.New("search query provided is not a supported audio type")
 
 func DetermineAudioType(query string) (SupportedAudioType, error) {
 	if matched, _ := regexp.MatchString(YoutubeVideoRegex, query); matched {
@@ -45,7 +43,14 @@ func DetermineAudioType(query string) (SupportedAudioType, error) {
 		if regexp.MustCompile(`sets`).MatchString(query) {
 			return SoundCloudPlaylist, nil
 		}
+
 		return SoundCloudTrack, nil
 	}
+
 	return "", UnsupportedAudioTypeErr
+}
+
+// Audio type is a playlist
+func IsMultiTrackType(audioType SupportedAudioType) bool {
+	return audioType == SpotifyPlaylist || audioType == SpotifyAlbum
 }

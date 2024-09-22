@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"sync"
+
+	"tunes/pkg/spotify"
 	"tunes/pkg/util"
 
 	"github.com/bwmarrin/discordgo"
@@ -36,15 +38,17 @@ type musicPlayerCog struct {
 	logger           *zap.Logger
 	songSignal       chan *guildPlayer
 	guildVoiceStates map[string]*guildPlayer
+	spotifyClient    *spotify.SpotifyWrapper
 }
 
-func NewMusicPlayerCog(logger *zap.Logger, httpClient *http.Client) (*musicPlayerCog, error) {
+func NewMusicPlayerCog(logger *zap.Logger, httpClient *http.Client, spotifyWrapper *spotify.SpotifyWrapper) (*musicPlayerCog, error) {
 	songSignals := make(chan *guildPlayer)
 	musicCog := &musicPlayerCog{
 		httpClient:       httpClient,
 		logger:           logger,
 		songSignal:       songSignals,
 		guildVoiceStates: make(map[string]*guildPlayer),
+		spotifyClient:    spotifyWrapper,
 	}
 
 	go musicCog.globalPlay()
@@ -62,6 +66,7 @@ func (m *musicPlayerCog) GetCommands() []*discordgo.ApplicationCommand {
 					Name:        "query",
 					Description: "Song/playlist search query",
 					Type:        discordgo.ApplicationCommandOptionString,
+					Required:    true,
 				},
 			},
 		},
@@ -157,12 +162,18 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			voiceState:  NotPlaying,
 		}
 	}
-	// options := interaction.ApplicationCommandData().Options
-	// query := options[0].Value.(string)
+
+	options := interaction.ApplicationCommandData().Options
+	query := options[0].Value.(string)
+	// audioType, err := models.DetermineAudioType(query)
+	// if err != nil {
+	// 	return fmt.Errorf("determining audio type: %w", err)
+	// }
+
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 	ctx := context.Background()
 
-	result, err := goutubedl.New(ctx, "https://www.youtube.com/watch?v=xjoBP7SDgaY", goutubedl.Options{
+	result, err := goutubedl.New(ctx, query, goutubedl.Options{
 		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 	})
@@ -219,5 +230,4 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 	if err != nil {
 		m.logger.Error("An error occurred during when executing command", zap.Error(err), zap.String("command", interaction.ApplicationCommandData().Name))
 	}
-
 }

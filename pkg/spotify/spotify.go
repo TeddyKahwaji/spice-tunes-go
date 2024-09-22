@@ -7,7 +7,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
-	music "tunes/internal/music"
+
+	models "tunes/pkg/models"
 
 	"github.com/zmb3/spotify"
 )
@@ -24,7 +25,13 @@ type TrackData struct {
 
 type SpotifyData struct {
 	Tracks []TrackData
-	Type   music.SupportedAudioType
+	Type   models.SupportedAudioType
+}
+
+func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
+	return &SpotifyWrapper{
+		client: client,
+	}
 }
 
 func (s *SpotifyWrapper) GetTracksData(ctx context.Context, query string) (*SpotifyData, error) {
@@ -33,10 +40,10 @@ func (s *SpotifyWrapper) GetTracksData(ctx context.Context, query string) (*Spot
 		err    error
 	)
 
-	audioType, err := music.DetermineAudioType(query)
+	audioType, err := models.DetermineAudioType(query)
 	if err != nil {
 		return nil, fmt.Errorf("determining audio type: %w", err)
-	} else if audioType != music.SpotifyPlaylist && audioType != music.SpotifyTrack && audioType != music.SpotifyAlbum {
+	} else if audioType != models.SpotifyPlaylist && audioType != models.SpotifyTrack && audioType != models.SpotifyAlbum {
 		return nil, errors.New("audio type provided is not from a spotify source")
 	}
 
@@ -46,13 +53,13 @@ func (s *SpotifyWrapper) GetTracksData(ctx context.Context, query string) (*Spot
 	}
 
 	switch audioType {
-	case music.SpotifyPlaylist:
+	case models.SpotifyPlaylist:
 		result, err = s.handlePlaylistData(spotifyTrackID)
 
-	case music.SpotifyAlbum:
+	case models.SpotifyAlbum:
 		result, err = s.handleAlbumData(spotifyTrackID)
 
-	case music.SpotifyTrack:
+	case models.SpotifyTrack:
 		result, err = s.handleSingleTrackData(spotifyTrackID)
 	}
 
@@ -78,7 +85,7 @@ func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*SpotifyD
 
 	return &SpotifyData{
 		Tracks: trackData,
-		Type:   music.SpotifyTrack,
+		Type:   models.SpotifyTrack,
 	}, nil
 }
 
@@ -97,12 +104,13 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, e
 
 	for {
 		tracks := result.Tracks.Tracks
-		wg.Add(1)
 
+		wg.Add(1)
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
 			mu.Lock()
 			defer mu.Unlock()
+
 			for _, track := range tracks {
 				trackData = append(trackData, TrackData{
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
@@ -110,7 +118,6 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, e
 					TrackDuration: track.TimeDuration(),
 				})
 			}
-
 		}(tracks)
 
 		if result.Tracks.Next == "" {
@@ -126,10 +133,10 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*SpotifyData, e
 
 	return &SpotifyData{
 		Tracks: trackData,
-		Type:   music.SpotifyAlbum,
+		Type:   models.SpotifyAlbum,
 	}, nil
-
 }
+
 func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData, error) {
 	trackData := []TrackData{}
 
@@ -144,19 +151,19 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData
 		Offset: &offset,
 		Limit:  &limit,
 	}, "items(track(name,href,album,artists,duration_ms(name,href,images))), next")
-
 	if err != nil {
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
 
 	for {
 		tracks := result.Tracks
-		wg.Add(1)
 
+		wg.Add(1)
 		go func(tracks []spotify.PlaylistTrack) {
 			defer wg.Done()
 			mu.Lock()
 			defer mu.Unlock()
+
 			for _, track := range tracks {
 				trackData = append(trackData, TrackData{
 					TrackName:     track.Track.Name + " - " + track.Track.Artists[0].Name,
@@ -164,7 +171,6 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData
 					TrackDuration: track.Track.TimeDuration(),
 				})
 			}
-
 		}(tracks)
 
 		if result.Next == "" {
@@ -180,29 +186,29 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*SpotifyData
 
 	return &SpotifyData{
 		Tracks: trackData,
-		Type:   music.SpotifyPlaylist,
+		Type:   models.SpotifyPlaylist,
 	}, nil
 }
 
-func extractSpotifyID(audioType music.SupportedAudioType, spotifyURL string) (string, error) {
-	playlistRegex := regexp.MustCompile(music.SpotifyPlaylistRegex)
-	singleTrackRegex := regexp.MustCompile(music.SpotifyTrackRegex)
-	albumRegex := regexp.MustCompile(music.SpotifyAlbumRegex)
+func extractSpotifyID(audioType models.SupportedAudioType, spotifyURL string) (string, error) {
+	playlistRegex := regexp.MustCompile(models.SpotifyPlaylistRegex)
+	singleTrackRegex := regexp.MustCompile(models.SpotifyTrackRegex)
+	albumRegex := regexp.MustCompile(models.SpotifyAlbumRegex)
 
 	switch audioType {
-	case music.SpotifyPlaylist:
+	case models.SpotifyPlaylist:
 		matches := playlistRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 
-	case music.SpotifyAlbum:
+	case models.SpotifyAlbum:
 		matches := albumRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 
-	case music.SpotifyTrack:
+	case models.SpotifyTrack:
 		matches := singleTrackRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
