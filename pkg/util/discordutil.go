@@ -81,7 +81,6 @@ func SendMessage(session *discordgo.Session, interaction *discordgo.Interaction,
 		if err != nil {
 			return fmt.Errorf("sending follow up message: %w", err)
 		}
-
 	} else {
 		params := &discordgo.InteractionResponseData{
 			Embeds: []*discordgo.MessageEmbed{msgData.Embeds},

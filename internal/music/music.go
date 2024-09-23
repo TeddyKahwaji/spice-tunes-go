@@ -42,14 +42,14 @@ type TrackDataRetriever interface {
 	GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
 }
 
-type MusicCogConfig struct {
+type CogConfig struct {
 	Logger               *zap.Logger
 	HttpClient           *http.Client
 	SpotifyWrapper       *spotify.SpotifyWrapper
 	YoutubeSearchWrapper *youtube.YoutubeSearchWrapper
 }
 
-func NewMusicPlayerCog(config *MusicCogConfig) (*musicPlayerCog, error) {
+func NewMusicPlayerCog(config *CogConfig) (*musicPlayerCog, error) {
 	if config.Logger == nil ||
 		config.HttpClient == nil ||
 		config.SpotifyWrapper == nil ||

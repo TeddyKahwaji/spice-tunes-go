@@ -85,6 +85,7 @@ func main() {
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 	youtubeAPIKey := os.Getenv("YOUTUBE_API_KEY")
+
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
 		ctx := context.Background()
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
@@ -93,7 +94,7 @@ func main() {
 			logger.Fatal("unable to instantiate youtubeWrapperClient", zap.Error(err))
 		}
 
-		musicCogConfig := &music.MusicCogConfig{
+		musicCogConfig := &music.CogConfig{
 			HttpClient:           &httpClient,
 			SpotifyWrapper:       spotifyWrapper,
 			Logger:               logger,

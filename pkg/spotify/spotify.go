@@ -126,7 +126,6 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*audiotype.Data
 		if err = s.client.NextPage(&result.Tracks); err != nil {
 			return nil, fmt.Errorf("getting next page: %w", err)
 		}
-
 	}
 
 	for currentPage := range page + 1 {
@@ -193,7 +192,6 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*audiotype.D
 		if err = s.client.NextPage(result); err != nil {
 			return nil, fmt.Errorf("getting next page: %w", err)
 		}
-
 	}
 
 	for currentPage := range page + 1 {
