@@ -214,7 +214,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				if guildPlayer.queuePtr+1 < len(guildPlayer.queue) {
-					guildPlayer.queuePtr += 1
+					guildPlayer.skip()
 					m.songSignal <- guildPlayer
 				} else {
 					guildPlayer.voiceState = NotPlaying
@@ -244,13 +244,14 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 		if err != nil {
 			if errors.Is(err, discordgo.ErrStateNotFound) {
 				invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("**%s, you must be in a voice channel.**", interaction.Member.User.Username))
-				err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Embeds: []*discordgo.MessageEmbed{invalidUsageEmbed},
-						Flags:  discordgo.MessageFlagsEphemeral,
+				msgData := util.MessageData{
+					Embeds: invalidUsageEmbed,
+					FlagWrapper: &util.FlagWrapper{
+						Flags: discordgo.MessageFlagsEphemeral,
 					},
-				})
+				}
+
+				err := util.SendMessage(session, interaction.Interaction, false, msgData)
 				if err != nil {
 					return fmt.Errorf("interaction response: %w", err)
 				}
@@ -299,19 +300,15 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 
 	if err != nil {
 		if errors.Is(err, audiotype.ErrSearchQueryNotFound) {
-			_, err := session.FollowupMessageCreate(interaction.Interaction, false, &discordgo.WebhookParams{
-				Embeds: []*discordgo.MessageEmbed{embeds.NotFoundEmbed()},
-			})
+			msgData := util.MessageData{
+				Embeds: embeds.NotFoundEmbed(),
+			}
+
+			err := util.SendMessage(session, interaction.Interaction, true, msgData, util.WithDeletion(10*time.Second, interaction.ChannelID))
 			if err != nil {
 				return fmt.Errorf("sending follow up message: %w", err)
 			}
 
-			message, err := session.InteractionResponse(interaction.Interaction)
-			if err != nil {
-				return err
-			}
-
-			_ = util.DeleteMessageAfterTime(session, interaction.ChannelID, message.ID, 10*time.Second)
 			return nil
 		}
 

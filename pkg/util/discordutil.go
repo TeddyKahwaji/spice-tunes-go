@@ -37,3 +37,78 @@ func GetVoiceChannelMemberCount(session *discordgo.Session, guildID, channelID s
 
 	return memberCount, nil
 }
+
+type sendMessageOption struct {
+	deletion      bool
+	deletionTimer time.Duration
+	channelID     string
+}
+
+type SendMessageOpt func(*sendMessageOption)
+
+type FlagWrapper struct {
+	Flags discordgo.MessageFlags
+}
+type MessageData struct {
+	Embeds      *discordgo.MessageEmbed
+	FlagWrapper *FlagWrapper
+}
+
+func WithDeletion(deletionTimer time.Duration, channelID string) SendMessageOpt {
+	return func(opt *sendMessageOption) {
+		opt.deletionTimer = deletionTimer
+		opt.deletion = true
+		opt.channelID = channelID
+	}
+}
+
+func SendMessage(session *discordgo.Session, interaction *discordgo.Interaction, isFollowUp bool, msgData MessageData, opts ...SendMessageOpt) error {
+	sendMessageOptions := sendMessageOption{}
+	for _, opt := range opts {
+		opt(&sendMessageOptions)
+	}
+
+	if isFollowUp {
+		params := &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{msgData.Embeds},
+		}
+
+		if msgData.FlagWrapper != nil {
+			params.Flags = msgData.FlagWrapper.Flags
+		}
+
+		_, err := session.FollowupMessageCreate(interaction, false, params)
+		if err != nil {
+			return fmt.Errorf("sending follow up message: %w", err)
+		}
+
+	} else {
+		params := &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{msgData.Embeds},
+		}
+
+		if msgData.FlagWrapper != nil {
+			params.Flags = msgData.FlagWrapper.Flags
+		}
+
+		err := session.InteractionRespond(interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: params,
+		})
+		if err != nil {
+			return fmt.Errorf("sending interaction response: %w", err)
+		}
+	}
+
+	if sendMessageOptions.deletion {
+		message, err := session.InteractionResponse(interaction)
+		if err != nil {
+			return fmt.Errorf("retrieving messageID from interaction response: %w", err)
+		}
+		if err := DeleteMessageAfterTime(session, sendMessageOptions.channelID, message.ID, sendMessageOptions.deletionTimer); err != nil {
+			return fmt.Errorf("deleting message: %w", err)
+		}
+	}
+
+	return nil
+}

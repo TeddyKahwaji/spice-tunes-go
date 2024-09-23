@@ -30,3 +30,7 @@ func (g *guildPlayer) resetQueue() {
 	g.queue = []string{}
 	g.queuePtr = 0
 }
+
+func (g *guildPlayer) skip() {
+	g.queuePtr += 1
+}
