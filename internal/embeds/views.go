@@ -30,7 +30,7 @@ func NewView(viewConfig ViewConfig) *view {
 	}
 }
 
-func (v *view) SendView(session *discordgo.Session, channelID string, handler Handler) (messageCreationHandler, error) {
+func (v *view) SendView(session *discordgo.Session, channelID string, handler Handler) error {
 	config := v.viewConfig
 	messageSendData := &discordgo.MessageSend{
 		Content: config.Content,
@@ -50,14 +50,14 @@ func (v *view) SendView(session *discordgo.Session, channelID string, handler Ha
 
 	message, err := session.ChannelMessageSendComplex(channelID, messageSendData)
 	if err != nil {
-		return nil, fmt.Errorf("sending complex message: %w", err)
+		return fmt.Errorf("sending complex message: %w", err)
 	}
 
 	if message == nil {
-		return nil, fmt.Errorf("empty message: %w", err)
+		return fmt.Errorf("empty message: %w", err)
 	}
 
-	return func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
+	componentHandler := func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 		if interaction.Type != discordgo.InteractionMessageComponent {
 			return
 		}
@@ -65,5 +65,9 @@ func (v *view) SendView(session *discordgo.Session, channelID string, handler Ha
 		if interaction.Message.ID == message.ID {
 			handler(message.ID)
 		}
-	}, nil
+	}
+
+	session.AddHandler(componentHandler)
+
+	return nil
 }
