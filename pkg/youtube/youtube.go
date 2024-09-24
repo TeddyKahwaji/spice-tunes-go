@@ -60,15 +60,20 @@ func extractYoutubeID(audioType audiotype.SupportedAudioType, fullURL string) (s
 	return "", errors.New("error could not extract any ID")
 }
 
-// TODO: Add context timeouts
-func (yt *YoutubeSearchWrapper) GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
+func (yt *YoutubeSearchWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
 	var (
 		trackData *audiotype.Data
 		err       error
 	)
 
+	if ctxData := ctx.Value("requesterName"); ctxData == nil {
+		return nil, errors.New("context must contain requesterName, otherwise not authorized to get track data")
+	}
+
+	requesterName := ctx.Value("requesterName").(string)
+
 	if audioType == audiotype.GenericSearch {
-		trackData, err = yt.handleGenericSearch(query)
+		trackData, err = yt.handleGenericSearch(requesterName, query)
 	} else {
 		youtubeID, err := extractYoutubeID(audioType, query)
 		if err != nil {
@@ -77,9 +82,9 @@ func (yt *YoutubeSearchWrapper) GetTracksData(audioType audiotype.SupportedAudio
 
 		switch audioType {
 		case audiotype.YoutubePlaylist:
-			trackData, err = yt.handlePlaylist(youtubeID)
+			trackData, err = yt.handlePlaylist(requesterName, youtubeID)
 		case audiotype.YoutubeSong:
-			trackData, err = yt.handleSingleTrack(youtubeID)
+			trackData, err = yt.handleSingleTrack(requesterName, youtubeID)
 		}
 	}
 
@@ -90,7 +95,7 @@ func (yt *YoutubeSearchWrapper) GetTracksData(audioType audiotype.SupportedAudio
 	return trackData, nil
 }
 
-func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*audiotype.Data, error) {
+func (yt *YoutubeSearchWrapper) handleSingleTrack(requesterName string, ID string) (*audiotype.Data, error) {
 	resp, err := yt.ytVideoService.List([]string{"snippet", "contentDetails"}).
 		Id(ID).
 		MaxResults(1).
@@ -121,6 +126,7 @@ func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*audiotype.Data, e
 		TrackImageURL: thumbnailURL,
 		TrackName:     item.Snippet.Title,
 		Query:         YoutubeVideoBase + ID,
+		Requester:     requesterName,
 	})
 
 	return &audiotype.Data{
@@ -129,7 +135,7 @@ func (yt *YoutubeSearchWrapper) handleSingleTrack(ID string) (*audiotype.Data, e
 	}, nil
 }
 
-func (yt *YoutubeSearchWrapper) handleGenericSearch(query string) (*audiotype.Data, error) {
+func (yt *YoutubeSearchWrapper) handleGenericSearch(requesterName string, query string) (*audiotype.Data, error) {
 	resp, err := yt.ytSearchService.List([]string{"snippet"}).
 		Q(query).
 		MaxResults(1).
@@ -164,6 +170,7 @@ func (yt *YoutubeSearchWrapper) handleGenericSearch(query string) (*audiotype.Da
 		TrackImageURL: thumbnailURL,
 		TrackName:     item.Snippet.Title,
 		Query:         YoutubeVideoBase + item.Id.VideoId,
+		Requester:     requesterName,
 	})
 
 	return &audiotype.Data{
@@ -172,7 +179,7 @@ func (yt *YoutubeSearchWrapper) handleGenericSearch(query string) (*audiotype.Da
 	}, nil
 }
 
-func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*audiotype.Data, error) {
+func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) (*audiotype.Data, error) {
 	req := yt.ytPlaylistService.List([]string{"snippet", "contentDetails"}).
 		PlaylistId(ID).
 		MaxResults(100)
@@ -199,7 +206,10 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(ID string) (*audiotype.Data, erro
 		go func() {
 			defer wg.Done()
 			for _, item := range items {
-				data := audiotype.TrackData{}
+				data := audiotype.TrackData{
+					Requester: requesterName,
+				}
+
 				videoID := item.Snippet.ResourceId.VideoId
 				if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
 					var thumbnailURL string

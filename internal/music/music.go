@@ -39,7 +39,7 @@ type track struct {
 }
 
 type TrackDataRetriever interface {
-	GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
+	GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
 }
 
 type CogConfig struct {
@@ -207,6 +207,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	defer encodingStream.Cleanup()
 
 	doneChan := make(chan error)
+
 	guildPlayer.stream = dca.NewStream(encodingStream, guildPlayer.voiceClient, doneChan)
 	guildPlayer.voiceState = Playing
 
@@ -270,7 +271,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 		m.guildVoiceStates[interaction.GuildID] = &guildPlayer{
 			voiceClient: channelVoiceConnection,
 			guildID:     interaction.GuildID,
-			queue:       []string{},
+			queue:       []audiotype.TrackData{},
 			voiceState:  NotPlaying,
 			queuePtr:    0,
 		}
@@ -291,11 +292,13 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 
+	ctx := context.WithValue(context.Background(), "requesterName", interaction.Member.User.Username)
+
 	var trackData *audiotype.Data
 	if audiotype.IsSpotify(audioType) {
-		trackData, err = m.retrieveTracks(audioType, query, m.spotifyClient)
+		trackData, err = m.retrieveTracks(ctx, audioType, query, m.spotifyClient)
 	} else if audiotype.IsYoutube(audioType) || audioType == audiotype.GenericSearch {
-		trackData, err = m.retrieveTracks(audioType, query, m.ytSearchWrapper)
+		trackData, err = m.retrieveTracks(ctx, audioType, query, m.ytSearchWrapper)
 	}
 
 	if err != nil {
@@ -316,6 +319,9 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	}
 
 	m.enqueueItems(guildPlayer, trackData)
+	if err := guildPlayer.generateMusicPlayerView(session, interaction.ChannelID, time.Second*2); err != nil {
+		return fmt.Errorf("generating music player view: %w", err)
+	}
 
 	if guildPlayer.voiceState == NotPlaying {
 		m.songSignal <- guildPlayer
@@ -348,13 +354,13 @@ func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discor
 	}
 }
 
-func (m *musicPlayerCog) retrieveTracks(audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
+func (m *musicPlayerCog) retrieveTracks(ctx context.Context, audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
 	var (
 		trackData *audiotype.Data
 		err       error
 	)
 
-	trackData, err = trackRetriever.GetTracksData(audioType, query)
+	trackData, err = trackRetriever.GetTracksData(ctx, audioType, query)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving tracks: %w", err)
 	}
@@ -366,7 +372,7 @@ func (m *musicPlayerCog) enqueueItems(guildPlayer *guildPlayer, trackData *audio
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, track := range trackData.Tracks {
-		guildPlayer.queue = append(guildPlayer.queue, track.Query)
+		guildPlayer.queue = append(guildPlayer.queue, track)
 	}
 }
 

@@ -1,6 +1,7 @@
 package embeds
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -18,16 +19,23 @@ type ViewConfig struct {
 
 type view struct {
 	viewConfig ViewConfig
+	messageID  string
 }
 
 type Handler func(msgID string)
-
-type messageCreationHandler func(session *discordgo.Session, interaction *discordgo.InteractionCreate)
 
 func NewView(viewConfig ViewConfig) *view {
 	return &view{
 		viewConfig: viewConfig,
 	}
+}
+
+func (v *view) EditView() error {
+	if v.messageID == "" {
+		return errors.New("no view message has previously been sent")
+	}
+
+	return nil
 }
 
 func (v *view) SendView(session *discordgo.Session, channelID string, handler Handler) error {
@@ -37,11 +45,7 @@ func (v *view) SendView(session *discordgo.Session, channelID string, handler Ha
 	}
 
 	if config.Embeds != nil {
-		if len(config.Embeds) > 1 {
-			messageSendData.Embeds = config.Embeds
-		} else {
-			messageSendData.Embed = config.Embeds[0]
-		}
+		messageSendData.Embeds = config.Embeds
 	}
 
 	if config.Components != nil {
@@ -63,11 +67,12 @@ func (v *view) SendView(session *discordgo.Session, channelID string, handler Ha
 		}
 
 		if interaction.Message.ID == message.ID {
-			handler(message.ID)
+			handler(interaction.MessageComponentData().CustomID)
 		}
 	}
 
 	session.AddHandler(componentHandler)
+	v.messageID = message.ID
 
 	return nil
 }

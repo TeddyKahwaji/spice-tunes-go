@@ -1,6 +1,12 @@
 package embeds
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"time"
+
+	"tunes/pkg/audiotype"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 func ErrorMessageEmbed(msg string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
@@ -22,4 +28,26 @@ func NotFoundEmbed() *discordgo.MessageEmbed {
 			URL: "https://media.giphy.com/media/piL4e4WusrA4S0KODK/giphy.gif",
 		},
 	}
+}
+
+func MusicPlayerEmbed(trackData audiotype.TrackData, duration time.Duration) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title:       "Now Playing 🎵",
+		Description: trackData.TrackName,
+		Color:       0xd5a7b4,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "`Length:`",
+				Value:  duration.String(),
+				Inline: true,
+			},
+			{
+				Name:   "`Requested by:`",
+				Value:  trackData.Requester,
+				Inline: true,
+			},
+		},
+	}
+
+	return embed
 }

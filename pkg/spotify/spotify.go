@@ -1,6 +1,7 @@
 package spotify
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -21,11 +22,17 @@ func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
 	}
 }
 
-func (s *SpotifyWrapper) GetTracksData(audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
+func (s *SpotifyWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
 	var (
 		result *audiotype.Data
 		err    error
 	)
+
+	if ctxData := ctx.Value("requesterName"); ctxData == nil {
+		return nil, errors.New("context must contain requesterName, otherwise not authorized to get track data")
+	}
+
+	requesterName := ctx.Value("requesterName").(string)
 
 	if audioType != audiotype.SpotifyPlaylist && audioType != audiotype.SpotifyTrack && audioType != audiotype.SpotifyAlbum {
 		return nil, errors.New("audio type provided is not from a spotify source")
@@ -38,13 +45,13 @@ func (s *SpotifyWrapper) GetTracksData(audioType audiotype.SupportedAudioType, q
 
 	switch audioType {
 	case audiotype.SpotifyPlaylist:
-		result, err = s.handlePlaylistData(spotifyTrackID)
+		result, err = s.handlePlaylistData(requesterName, spotifyTrackID)
 
 	case audiotype.SpotifyAlbum:
-		result, err = s.handleAlbumData(spotifyTrackID)
+		result, err = s.handleAlbumData(requesterName, spotifyTrackID)
 
 	case audiotype.SpotifyTrack:
-		result, err = s.handleSingleTrackData(spotifyTrackID)
+		result, err = s.handleSingleTrackData(requesterName, spotifyTrackID)
 	}
 
 	if err != nil {
@@ -58,7 +65,7 @@ func (s *SpotifyWrapper) GetTracksData(audioType audiotype.SupportedAudioType, q
 	return result, err
 }
 
-func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*audiotype.Data, error) {
+func (s *SpotifyWrapper) handleSingleTrackData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	trackData := make([]audiotype.TrackData, 0, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
@@ -71,6 +78,7 @@ func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*audiotyp
 		TrackName:     trackTitle,
 		TrackImageURL: track.Album.Images[0].URL,
 		Query:         "ytsearch1:" + trackTitle,
+		Requester:     requesterName,
 	})
 
 	return &audiotype.Data{
@@ -79,7 +87,7 @@ func (s *SpotifyWrapper) handleSingleTrackData(spotifyTrackID string) (*audiotyp
 	}, nil
 }
 
-func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*audiotype.Data, error) {
+func (s *SpotifyWrapper) handleAlbumData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	trackData := []audiotype.TrackData{}
 
 	var (
@@ -109,6 +117,7 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*audiotype.Data
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
 					TrackImageURL: result.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
+					Requester:     requesterName,
 				})
 			}
 
@@ -140,7 +149,7 @@ func (s *SpotifyWrapper) handleAlbumData(spotifyTrackID string) (*audiotype.Data
 	}, nil
 }
 
-func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*audiotype.Data, error) {
+func (s *SpotifyWrapper) handlePlaylistData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	trackData := []audiotype.TrackData{}
 
 	var (
@@ -175,6 +184,7 @@ func (s *SpotifyWrapper) handlePlaylistData(spotifyTrackID string) (*audiotype.D
 					TrackName:     fullTrackName,
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
+					Requester:     requesterName,
 				})
 			}
 

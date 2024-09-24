@@ -12,6 +12,7 @@ type TrackData struct {
 	TrackName     string
 	TrackImageURL string
 	Query         string
+	Requester     string
 }
 
 type Data struct {
