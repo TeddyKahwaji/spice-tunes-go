@@ -167,7 +167,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 
 func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	// exit if no voice client or no tracks in the queue
-	if guildPlayer.voiceClient == nil || len(guildPlayer.queue) == 0 {
+	if guildPlayer.voiceClient == nil || !guildPlayer.hasNext() {
 		return nil
 	}
 
@@ -213,7 +213,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	for err := range doneChan {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if guildPlayer.queuePtr+1 < len(guildPlayer.queue) {
+				if guildPlayer.hasNext() {
 					guildPlayer.skip()
 					m.songSignal <- guildPlayer
 				} else {

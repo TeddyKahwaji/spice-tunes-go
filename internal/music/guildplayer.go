@@ -31,6 +31,10 @@ func (g *guildPlayer) resetQueue() {
 	g.queuePtr = 0
 }
 
+func (g *guildPlayer) hasNext() bool {
+	return g.queuePtr+1 < len(g.queue)
+}
+
 func (g *guildPlayer) skip() {
 	g.queuePtr += 1
 }
