@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,10 +30,6 @@ type musicPlayerCog struct {
 	guildVoiceStates map[string]*guildPlayer
 	spotifyClient    *spotify.SpotifyWrapper
 	ytSearchWrapper  *youtube.YoutubeSearchWrapper
-}
-
-type track struct {
-	file *os.File
 }
 
 type TrackDataRetriever interface {
@@ -109,7 +104,7 @@ func (m *musicPlayerCog) globalPlay() {
 	}
 }
 
-func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*track, error) {
+func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*goutubedl.DownloadResult, error) {
 	var (
 		options         goutubedl.Options
 		downloadOptions goutubedl.DownloadOptions
@@ -147,20 +142,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 		return nil, fmt.Errorf("downloading youtube data: %w", err)
 	}
 
-	defer func() {
-		if err := downloadResult.Close(); err != nil {
-			m.logger.Warn("couldn't close downloaded result", zap.Error(err))
-		}
-	}()
-
-	file, err := util.DownloadFileToTempDirectory(downloadResult)
-	if err != nil {
-		return nil, fmt.Errorf("error downloading youtube content to temporary file: %w", err)
-	}
-
-	return &track{
-		file: file,
-	}, nil
+	return downloadResult, nil
 }
 
 func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
@@ -175,21 +157,14 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 
 	ctx := context.Background()
 
-	track, err := m.downloadTrack(ctx, audioTrackName)
+	result, err := m.downloadTrack(ctx, audioTrackName)
 	if err != nil {
-		return fmt.Errorf("downloading track: %w", err)
+		return fmt.Errorf("downloading result: %w", err)
 	}
 
-	file := track.file
-	filePath := track.file.Name()
-
 	defer func() {
-		if err := file.Close(); err != nil {
-			m.logger.Warn("could not close file", zap.Error(err), zap.String("file_name", file.Name()))
-		}
-
-		if err := util.DeleteFile(filePath); err != nil {
-			m.logger.Warn("could not delete file", zap.Error(err), zap.String("file_name", filePath))
+		if err := result.Close(); err != nil {
+			m.logger.Warn("couldn't close downloaded result", zap.Error(err))
 		}
 	}()
 
@@ -197,7 +172,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	opts.RawOutput = true
 	opts.Bitrate = 128
 
-	encodingStream, err := dca.EncodeFile(filePath, opts)
+	encodingStream, err := dca.EncodeMem(result, opts)
 	if err != nil {
 		return fmt.Errorf("encoding file: %w", err)
 	}
@@ -221,10 +196,6 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 					m.mu.Lock()
 					guildPlayer.ResetQueue()
 					m.mu.Unlock()
-				}
-
-				if err := util.DeleteFile(filePath); err != nil {
-					m.logger.Warn("could not delete file", zap.Error(err))
 				}
 			} else {
 				m.logger.Warn("error during audio stream", zap.Error(err))
@@ -311,6 +282,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	}
 
 	m.enqueueItems(guildPlayer, trackData)
+
 	if err := guildPlayer.GenerateMusicPlayerView(interaction.Interaction, session); err != nil {
 		return fmt.Errorf("generating music player view: %w", err)
 	}
@@ -330,6 +302,7 @@ func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discor
 		channelMemberCount, err := util.GetVoiceChannelMemberCount(session, vc.BeforeUpdate.GuildID, vc.BeforeUpdate.ChannelID)
 		if err != nil {
 			m.logger.Error("error getting channel member count", zap.Error(err), zap.String("channel_id", vc.BeforeUpdate.ChannelID))
+
 			return
 		}
 
@@ -337,6 +310,7 @@ func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discor
 			if botVoiceConnection, ok := session.VoiceConnections[vc.GuildID]; ok && botVoiceConnection.ChannelID == vc.BeforeUpdate.ChannelID {
 				if err := botVoiceConnection.Disconnect(); err != nil {
 					m.logger.Error("error disconnecting from channel", zap.Error(err))
+
 					return
 				}
 
@@ -363,9 +337,8 @@ func (m *musicPlayerCog) retrieveTracks(ctx context.Context, audioType audiotype
 func (m *musicPlayerCog) enqueueItems(guildPlayer *guildPlayer, trackData *audiotype.Data) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, track := range trackData.Tracks {
-		guildPlayer.queue = append(guildPlayer.queue, track)
-	}
+
+	guildPlayer.queue = append(guildPlayer.queue, trackData.Tracks...)
 }
 
 func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {

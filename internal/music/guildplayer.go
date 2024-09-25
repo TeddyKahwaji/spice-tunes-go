@@ -107,7 +107,7 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 			Embeds:     &viewConfig.Embeds,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("editing complex message: %w", err)
 		}
 
 		if err := session.InteractionRespond(passedInteraction, &discordgo.InteractionResponse{

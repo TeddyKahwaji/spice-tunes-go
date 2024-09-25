@@ -194,6 +194,7 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 				}
 
 				videoID := item.Snippet.ResourceId.VideoId
+
 				if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
 					var thumbnailURL string
 					if thumbnails.Maxres != nil {
@@ -210,6 +211,7 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 				if item.ContentDetails.StartAt != "" && item.ContentDetails.EndAt != "" {
 					startAt := item.ContentDetails.StartAt
 					endAt := item.ContentDetails.EndAt
+
 					startTime, err := time.Parse(time.RFC3339, startAt)
 					if err != nil {
 						return fmt.Errorf("error parsing StartAt: %w", err)
