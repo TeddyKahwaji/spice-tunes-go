@@ -3,8 +3,8 @@ package music
 import (
 	"errors"
 	"fmt"
-	"time"
 
+	views "tunes/internal"
 	"tunes/internal/embeds"
 	"tunes/pkg/audiotype"
 
@@ -20,12 +20,7 @@ const (
 	NotPlaying VoiceState = "NOT_PLAYING"
 )
 
-// TODO: This will handle updating view
-// type musicPlayerView struct {
-// }
-
 type guildPlayer struct {
-	// musicPlayerView *musicPlayerView
 	guildID     string
 	voiceClient *discordgo.VoiceConnection
 	queue       []audiotype.TrackData
@@ -34,16 +29,22 @@ type guildPlayer struct {
 	stream      *dca.StreamingSession
 }
 
-func (g *guildPlayer) generateMusicPlayerView(session *discordgo.Session, channelID string, timeDuration time.Duration) error {
-	if len(g.queue) == 0 {
-		return errors.New("cannot generating music player with empty queue")
+func NewGuildPlayer(vc *discordgo.VoiceConnection, guildID string) *guildPlayer {
+	return &guildPlayer{
+		voiceClient: vc,
+		guildID:     guildID,
+		queue:       []audiotype.TrackData{},
+		voiceState:  NotPlaying,
+		queuePtr:    0,
 	}
+}
 
+func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	currentTrack := g.queue[g.queuePtr]
 
-	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack, timeDuration)
+	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack)
 
-	if g.hasNext() {
+	if g.HasNext() {
 		musicPlayerEmbed.Fields = append(musicPlayerEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "`Up Next:`",
 			Value:  g.queue[g.queuePtr+1].TrackName,
@@ -51,7 +52,7 @@ func (g *guildPlayer) generateMusicPlayerView(session *discordgo.Session, channe
 		})
 	}
 
-	if g.hasPrevious() {
+	if g.HasPrevious() {
 		musicPlayerEmbed.Fields = append(musicPlayerEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "`Previous Song:`",
 			Value:  g.queue[g.queuePtr-1].TrackName,
@@ -64,50 +65,88 @@ func (g *guildPlayer) generateMusicPlayerView(session *discordgo.Session, channe
 	}
 
 	buttonsConfig := embeds.MusicPlayButtonsConfig{
-		SkipDisabled: !g.hasNext(),
-		BackDisabled: !g.hasPrevious(),
+		SkipDisabled: !g.HasNext(),
+		BackDisabled: !g.HasPrevious(),
 	}
 
-	viewConfig := embeds.ViewConfig{
-		Components: &embeds.ComponentHandler{
-			MessageComponents: embeds.GetMusicPlayerButtons(buttonsConfig),
+	musicPlayerButtons := embeds.GetMusicPlayerButtons(buttonsConfig)
+
+	return views.ViewConfig{
+		Components: &views.ComponentHandler{
+			MessageComponents: musicPlayerButtons,
 		},
 		Embeds: []*discordgo.MessageEmbed{musicPlayerEmbed},
 	}
+}
 
-	musicPlayerView := embeds.NewView(viewConfig)
-
-	handler := func(messageCustomID string) {
-		switch messageCustomID {
-		case "BackBtn":
-			fmt.Println("implement")
-		}
+func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session) error {
+	if len(g.queue) == 0 {
+		return errors.New("cannot generating music player with empty queue")
 	}
 
-	if err := musicPlayerView.SendView(session, channelID, handler); err != nil {
+	viewConfig := g.getMusicPlayerViewConfig()
+	musicPlayerView := views.NewView(viewConfig)
+
+	handler := func(passedInteraction *discordgo.Interaction) error {
+		messageID := passedInteraction.Message.ID
+		messageCustomID := passedInteraction.MessageComponentData().CustomID
+
+		switch messageCustomID {
+		case "SkipBtn":
+			g.Skip()
+		case "BackBtn":
+			g.Rewind()
+		}
+
+		viewConfig := g.getMusicPlayerViewConfig()
+
+		_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			ID:         messageID,
+			Channel:    passedInteraction.ChannelID,
+			Components: &viewConfig.Components.MessageComponents,
+			Embeds:     &viewConfig.Embeds,
+		})
+		if err != nil {
+			return err
+		}
+
+		if err := session.InteractionRespond(passedInteraction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+		}); err != nil {
+			return fmt.Errorf("sending update message: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := musicPlayerView.SendView(interaction, session, handler); err != nil {
 		return fmt.Errorf("sending music player view: %w", err)
 	}
 
 	return nil
 }
 
-func (g *guildPlayer) getCurrentSong() string {
+func (g *guildPlayer) GetCurrentSong() string {
 	return g.queue[g.queuePtr].Query
 }
 
-func (g *guildPlayer) resetQueue() {
+func (g *guildPlayer) ResetQueue() {
 	g.queue = []audiotype.TrackData{}
 	g.queuePtr = 0
 }
 
-func (g *guildPlayer) hasNext() bool {
+func (g *guildPlayer) HasNext() bool {
 	return g.queuePtr+1 < len(g.queue)
 }
 
-func (g *guildPlayer) hasPrevious() bool {
+func (g *guildPlayer) HasPrevious() bool {
 	return g.queuePtr-1 >= 0
 }
 
-func (g *guildPlayer) skip() {
+func (g *guildPlayer) Skip() {
 	g.queuePtr += 1
+}
+
+func (g *guildPlayer) Rewind() {
+	g.queuePtr -= 1
 }

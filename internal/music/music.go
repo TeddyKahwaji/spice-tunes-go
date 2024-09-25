@@ -34,8 +34,7 @@ type musicPlayerCog struct {
 }
 
 type track struct {
-	file     *os.File
-	duration time.Duration
+	file *os.File
 }
 
 type TrackDataRetriever interface {
@@ -160,19 +159,18 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 	}
 
 	return &track{
-		file:     file,
-		duration: time.Duration(result.Info.Duration),
+		file: file,
 	}, nil
 }
 
 func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	// exit if no voice client or no tracks in the queue
-	if guildPlayer.voiceClient == nil || !guildPlayer.hasNext() {
+	if guildPlayer.voiceClient == nil || !guildPlayer.HasNext() {
 		return nil
 	}
 
 	m.mu.Lock()
-	audioTrackName := guildPlayer.getCurrentSong()
+	audioTrackName := guildPlayer.GetCurrentSong()
 	m.mu.Unlock()
 
 	ctx := context.Background()
@@ -214,14 +212,14 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	for err := range doneChan {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if guildPlayer.hasNext() {
-					guildPlayer.skip()
+				if guildPlayer.HasNext() {
+					guildPlayer.Skip()
 					m.songSignal <- guildPlayer
 				} else {
 					guildPlayer.voiceState = NotPlaying
 
 					m.mu.Lock()
-					guildPlayer.resetQueue()
+					guildPlayer.ResetQueue()
 					m.mu.Unlock()
 				}
 
@@ -268,13 +266,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			return fmt.Errorf("error unable to join voice channel: %w", err)
 		}
 
-		m.guildVoiceStates[interaction.GuildID] = &guildPlayer{
-			voiceClient: channelVoiceConnection,
-			guildID:     interaction.GuildID,
-			queue:       []audiotype.TrackData{},
-			voiceState:  NotPlaying,
-			queuePtr:    0,
-		}
+		m.guildVoiceStates[interaction.GuildID] = NewGuildPlayer(channelVoiceConnection, interaction.GuildID)
 	}
 
 	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
@@ -319,7 +311,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 	}
 
 	m.enqueueItems(guildPlayer, trackData)
-	if err := guildPlayer.generateMusicPlayerView(session, interaction.ChannelID, time.Second*2); err != nil {
+	if err := guildPlayer.GenerateMusicPlayerView(interaction.Interaction, session); err != nil {
 		return fmt.Errorf("generating music player view: %w", err)
 	}
 

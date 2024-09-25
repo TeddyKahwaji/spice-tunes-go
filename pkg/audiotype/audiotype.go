@@ -2,8 +2,10 @@ package audiotype
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"regexp"
+	"time"
 )
 
 type SupportedAudioType string
@@ -13,6 +15,7 @@ type TrackData struct {
 	TrackImageURL string
 	Query         string
 	Requester     string
+	Duration      time.Duration
 }
 
 type Data struct {
@@ -83,4 +86,11 @@ func IsSpotify(audioType SupportedAudioType) bool {
 
 func IsYoutube(audioType SupportedAudioType) bool {
 	return audioType == YoutubePlaylist || audioType == YoutubeSong
+}
+
+func FormatDuration(time time.Duration) string {
+	if time.Hours() >= 1 {
+		return fmt.Sprintf("%02d:%02d:%02d", int(time.Hours()), int(time.Minutes())%60, int(time.Seconds())%60)
+	}
+	return fmt.Sprintf("%02d:%02d", int(time.Minutes()), int(time.Seconds())%60)
 }

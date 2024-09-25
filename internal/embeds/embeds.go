@@ -1,8 +1,6 @@
 package embeds
 
 import (
-	"time"
-
 	"tunes/pkg/audiotype"
 
 	"github.com/bwmarrin/discordgo"
@@ -30,7 +28,7 @@ func NotFoundEmbed() *discordgo.MessageEmbed {
 	}
 }
 
-func MusicPlayerEmbed(trackData audiotype.TrackData, duration time.Duration) *discordgo.MessageEmbed {
+func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Now Playing 🎵",
 		Description: trackData.TrackName,
@@ -38,7 +36,7 @@ func MusicPlayerEmbed(trackData audiotype.TrackData, duration time.Duration) *di
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "`Length:`",
-				Value:  duration.String(),
+				Value:  audiotype.FormatDuration(trackData.Duration),
 				Inline: true,
 			},
 			{

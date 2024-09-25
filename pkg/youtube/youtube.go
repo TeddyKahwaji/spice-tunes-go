@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"sync"
+	"time"
 
 	"tunes/pkg/audiotype"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
@@ -122,11 +125,17 @@ func (yt *YoutubeSearchWrapper) handleSingleTrack(requesterName string, ID strin
 		}
 	}
 
+	duration, err := parseISO8601Duration(item.ContentDetails.Duration)
+	if err != nil {
+		return nil, fmt.Errorf("retrieving duration of video: %w", err)
+	}
+
 	trackData = append(trackData, audiotype.TrackData{
 		TrackImageURL: thumbnailURL,
 		TrackName:     item.Snippet.Title,
 		Query:         YoutubeVideoBase + ID,
 		Requester:     requesterName,
+		Duration:      time.Duration(duration),
 	})
 
 	return &audiotype.Data{
@@ -148,35 +157,13 @@ func (yt *YoutubeSearchWrapper) handleGenericSearch(requesterName string, query 
 		return nil, audiotype.ErrSearchQueryNotFound
 	}
 
-	trackData := make([]audiotype.TrackData, 0, 1)
-
 	if len(resp.Items) == 0 {
 		return nil, audiotype.ErrSearchQueryNotFound
 	}
 
 	item := resp.Items[0]
 
-	var thumbnailURL string
-
-	if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
-		if maxRes := thumbnails.Maxres; maxRes != nil {
-			thumbnailURL = maxRes.Url
-		} else if highRes := thumbnails.High; highRes != nil {
-			thumbnailURL = highRes.Url
-		}
-	}
-
-	trackData = append(trackData, audiotype.TrackData{
-		TrackImageURL: thumbnailURL,
-		TrackName:     item.Snippet.Title,
-		Query:         YoutubeVideoBase + item.Id.VideoId,
-		Requester:     requesterName,
-	})
-
-	return &audiotype.Data{
-		Tracks: trackData,
-		Type:   audiotype.GenericSearch,
-	}, nil
+	return yt.handleSingleTrack(requesterName, item.Id.VideoId)
 }
 
 func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) (*audiotype.Data, error) {
@@ -186,10 +173,8 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 
 	trackData := []audiotype.TrackData{}
 
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
+	var mu sync.Mutex
+	eg, _ := errgroup.WithContext(context.Background())
 
 	for {
 		resp, err := req.Do()
@@ -202,9 +187,7 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 			return nil, audiotype.ErrSearchQueryNotFound
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
 			for _, item := range items {
 				data := audiotype.TrackData{
 					Requester: requesterName,
@@ -224,15 +207,32 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 
 				fullURL := YoutubeVideoBase + videoID
 				title := item.Snippet.Title
+				if item.ContentDetails.StartAt != "" && item.ContentDetails.EndAt != "" {
+					startAt := item.ContentDetails.StartAt
+					endAt := item.ContentDetails.EndAt
+					startTime, err := time.Parse(time.RFC3339, startAt)
+					if err != nil {
+						return fmt.Errorf("error parsing StartAt: %w", err)
+					}
+
+					endTime, err := time.Parse(time.RFC3339, endAt)
+					if err != nil {
+						return fmt.Errorf("error parsing EndAt: %w", err)
+					}
+
+					data.Duration = endTime.Sub(startTime)
+				}
+
 				data.TrackName = title
 				data.Query = fullURL
 
 				mu.Lock()
 				trackData = append(trackData, data)
 				mu.Unlock()
-
 			}
-		}()
+
+			return nil
+		})
 
 		if resp.NextPageToken == "" {
 			break
@@ -242,10 +242,38 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("retrieving items from youtube playlist: %w", err)
+	}
 
 	return &audiotype.Data{
 		Tracks: trackData,
 		Type:   audiotype.YoutubePlaylist,
 	}, nil
+}
+
+func parseISO8601Duration(isoDuration string) (time.Duration, error) {
+	re := regexp.MustCompile(`PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?`)
+	matches := re.FindStringSubmatch(isoDuration)
+	if len(matches) == 0 {
+		return 0, errors.New("invalid ISO 8601 duration format")
+	}
+
+	var hours, minutes, seconds int
+
+	if matches[1] != "" {
+		hours, _ = strconv.Atoi(matches[1])
+	}
+	if matches[2] != "" {
+		minutes, _ = strconv.Atoi(matches[2])
+	}
+	if matches[3] != "" {
+		seconds, _ = strconv.Atoi(matches[3])
+	}
+
+	duration := time.Duration(hours)*time.Hour +
+		time.Duration(minutes)*time.Minute +
+		time.Duration(seconds)*time.Second
+
+	return duration, nil
 }

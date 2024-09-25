@@ -79,6 +79,7 @@ func (s *SpotifyWrapper) handleSingleTrackData(requesterName string, spotifyTrac
 		TrackImageURL: track.Album.Images[0].URL,
 		Query:         "ytsearch1:" + trackTitle,
 		Requester:     requesterName,
+		Duration:      track.TimeDuration(),
 	})
 
 	return &audiotype.Data{
@@ -118,6 +119,7 @@ func (s *SpotifyWrapper) handleAlbumData(requesterName string, spotifyTrackID st
 					TrackImageURL: result.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
 					Requester:     requesterName,
+					Duration:      track.TimeDuration(),
 				})
 			}
 
@@ -185,6 +187,7 @@ func (s *SpotifyWrapper) handlePlaylistData(requesterName string, spotifyTrackID
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
 					Requester:     requesterName,
+					Duration:      track.Track.TimeDuration(),
 				})
 			}
 

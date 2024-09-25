@@ -9,6 +9,7 @@ require (
 	github.com/zmb3/spotify v1.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.23.0
+	golang.org/x/sync v0.8.0
 	google.golang.org/api v0.198.0
 )
 
