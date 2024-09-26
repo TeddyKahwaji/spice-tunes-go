@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -52,6 +53,26 @@ func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret 
 	return sw.NewSpotifyWrapper(&client)
 }
 
+func writeNetrcFileContent() error {
+	netrcLogin := os.Getenv("YOUTUBE_USER_NAME")
+	netrcPassword := os.Getenv("YOUTUBE_PASSWORD")
+	netrcContent := fmt.Sprintf("machine example.com\nlogin %s\npassword %s\n", netrcLogin, netrcPassword)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Unable to find home directory: %v", err)
+	}
+
+	netrcPath := fmt.Sprintf("%s/.netrc", homeDir)
+	fmt.Println(netrcPath)
+
+	if err := os.WriteFile(netrcPath, []byte(netrcContent), 0600); err != nil {
+		return fmt.Errorf("writing netrc to file: %w", err)
+	}
+
+	return nil
+}
+
 func main() {
 	env := os.Getenv("ENV")
 	logger := getLogger(env)
@@ -92,6 +113,10 @@ func main() {
 
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
 		ctx := context.Background()
+		if err := writeNetrcFileContent(); err != nil {
+			logger.Fatal("writing netrc failed", zap.Error(err))
+		}
+
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
 		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, creds)
 		if err != nil {

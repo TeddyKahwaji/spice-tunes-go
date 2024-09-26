@@ -28,3 +28,5 @@ jobs:
           HD_GCP_PRIVATE_KEY: ${{secrets.GCP_PRIVATE_KEY}}
           HD_GCP_CLIENT_EMAIL: ${{secrets.GCP_CLIENT_EMAIL}}
           HD_GCP_CLIENT_ID: ${{secrets.GCP_CLIENT_ID}}
+          HD_YOUTUBE_USER_NAME: ${{secrets.YOUTUBE_USER_NAME}}
+          HD_YOUTUBE_PASSWORD: ${{secrets.YOUTUBE_PASSWORD}}
