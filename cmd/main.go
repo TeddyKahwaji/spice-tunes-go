@@ -56,7 +56,7 @@ func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret 
 func writeNetrcFileContent() error {
 	netrcLogin := os.Getenv("YOUTUBE_USER_NAME")
 	netrcPassword := os.Getenv("YOUTUBE_PASSWORD")
-	netrcContent := fmt.Sprintf("machine example.com\nlogin %s\npassword %s\n", netrcLogin, netrcPassword)
+	netrcContent := fmt.Sprintf("machine youtube.com\nlogin %s\npassword %s\n", netrcLogin, netrcPassword)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -64,7 +64,6 @@ func writeNetrcFileContent() error {
 	}
 
 	netrcPath := fmt.Sprintf("%s/.netrc", homeDir)
-	fmt.Println(netrcPath)
 
 	if err := os.WriteFile(netrcPath, []byte(netrcContent), 0600); err != nil {
 		return fmt.Errorf("writing netrc to file: %w", err)
