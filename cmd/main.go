@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"tunes/internal/gcp"
 	"tunes/internal/music"
 	sw "tunes/pkg/spotify"
 	"tunes/pkg/youtube"
@@ -84,12 +85,15 @@ func main() {
 
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
-	youtubeAPIKey := os.Getenv("YOUTUBE_API_KEY")
+	creds, err := gcp.GetCredentials()
+	if err != nil {
+		logger.Fatal("unable to retrieve gcp credentials", zap.Error(err))
+	}
 
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
 		ctx := context.Background()
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
-		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, youtubeAPIKey)
+		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, creds)
 		if err != nil {
 			logger.Fatal("unable to instantiate youtubeWrapperClient", zap.Error(err))
 		}

@@ -26,8 +26,8 @@ type YoutubeSearchWrapper struct {
 	ytSearchService   *youtube.SearchService
 }
 
-func NewYoutubeSearchWrapper(ctx context.Context, apiKey string) (*YoutubeSearchWrapper, error) {
-	service, err := youtube.NewService(ctx, option.WithAPIKey(apiKey))
+func NewYoutubeSearchWrapper(ctx context.Context, creds []byte) (*YoutubeSearchWrapper, error) {
+	service, err := youtube.NewService(ctx, option.WithCredentialsJSON(creds))
 	if err != nil {
 		return nil, fmt.Errorf("instantiating new service: %w", err)
 	}
