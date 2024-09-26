@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	views "tunes/internal"
 	"tunes/internal/embeds"
@@ -28,7 +29,7 @@ type guildPlayer struct {
 	voiceClient *discordgo.VoiceConnection
 	queue       []audiotype.TrackData
 	voiceState  VoiceState
-	queuePtr    int
+	queuePtr    atomic.Int32
 	stream      *dca.StreamingSession
 	doneChannel chan error
 	stopChannel chan bool
@@ -42,28 +43,27 @@ func NewGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID str
 		queue:       []audiotype.TrackData{},
 		voiceState:  NotPlaying,
 		stopChannel: make(chan bool),
-		queuePtr:    0,
 	}
 }
 
 func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
-	currentTrack := g.queue[g.queuePtr]
+	currentTrack := g.queue[g.queuePtr.Load()]
 
 	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack)
 
 	if g.HasNext() {
 		musicPlayerEmbed.Fields = append(musicPlayerEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "`Up Next:`",
-			Value:  g.queue[g.queuePtr+1].TrackName,
-			Inline: g.queuePtr != 0,
+			Value:  g.queue[g.queuePtr.Load()+1].TrackName,
+			Inline: g.queuePtr.Load() != 0,
 		})
 	}
 
 	if g.HasPrevious() {
 		musicPlayerEmbed.Fields = append(musicPlayerEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "`Previous Song:`",
-			Value:  g.queue[g.queuePtr-1].TrackName,
-			Inline: g.queuePtr != len(g.queue)-1,
+			Value:  g.queue[g.queuePtr.Load()-1].TrackName,
+			Inline: int(g.queuePtr.Load()) != len(g.queue)-1,
 		})
 	}
 
@@ -141,14 +141,14 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 func (g *guildPlayer) GetCurrentSong() string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.queue[g.queuePtr].Query
+	return g.queue[g.queuePtr.Load()].Query
 }
 
 func (g *guildPlayer) ResetQueue() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.queue = g.queue[:1]
-	g.queuePtr = 0
+	g.queuePtr.Store(0)
 }
 
 func (g *guildPlayer) AddTracks(data ...audiotype.TrackData) {
@@ -158,17 +158,19 @@ func (g *guildPlayer) AddTracks(data ...audiotype.TrackData) {
 }
 
 func (g *guildPlayer) HasNext() bool {
-	return g.queuePtr+1 < len(g.queue)
+	return int(g.queuePtr.Load())+1 < len(g.queue)
+}
+
+func (g *guildPlayer) IsEmptyQueue() bool {
+	return len(g.queue) == 0
 }
 
 func (g *guildPlayer) HasPrevious() bool {
-	return g.queuePtr-1 >= 0
+	return g.queuePtr.Load()-1 >= 0
 }
 
 func (g *guildPlayer) Skip() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.queuePtr++
+	_ = g.queuePtr.Add(1)
 }
 
 func (g *guildPlayer) SendStopSignal() {
@@ -176,7 +178,5 @@ func (g *guildPlayer) SendStopSignal() {
 }
 
 func (g *guildPlayer) Rewind() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.queuePtr--
+	_ = g.queuePtr.Add(-1)
 }

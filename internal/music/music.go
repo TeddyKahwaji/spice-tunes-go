@@ -144,7 +144,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 
 func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	// exit if no voice client or no tracks in the queue
-	if guildPlayer.voiceClient == nil || !guildPlayer.HasNext() {
+	if guildPlayer == nil || guildPlayer.voiceClient == nil || guildPlayer.IsEmptyQueue() {
 		return nil
 	}
 
