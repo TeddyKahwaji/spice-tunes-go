@@ -19,9 +19,8 @@ jobs:
           usedocker: true
           docker_heroku_process_type: worker
         env:
-          HD_SPICE_TUNES_DISCORD_TOKEN: ${{secrets.FIREBASE_PRIVATE_KEY}}
+          HD_SPICE_TUNES_DISCORD_TOKEN: ${{secrets.SPICE_TUNES_DISCORD_TOKEN}}
           HD_ENV: "PROD"
           HD_SPOTIFY_CLIENT_ID: ${{secrets.SPOTIFY_CLIENT_ID}}
           HD_SPOTIFY_CLIENT_SECRET: ${{secrets.SPOTIFY_CLIENT_SECRET}}
-          HD_SPICE_TUNES_DISCORD_TOKE: ${{secrets.SPICE_TUNES_DISCORD_TOKEN}}
           
