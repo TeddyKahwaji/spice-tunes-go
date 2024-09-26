@@ -1,6 +1,8 @@
 package embeds
 
 import (
+	"fmt"
+
 	"tunes/pkg/audiotype"
 
 	"github.com/bwmarrin/discordgo"
@@ -48,4 +50,18 @@ func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 	}
 
 	return embed
+}
+
+func UnexpectedErrorEmbed() *discordgo.MessageEmbed {
+	const supportServerInvite = "https://discord.gg/WsKwCTpKhH"
+	const botGif = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnphaG5wOG5ldjNwaG5qcmt5M3VubWwzY2RkOXVkeWx5cDNha2Y5YyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/Qbm1Oget7e3vVl9uPB/giphy.gif"
+
+	return &discordgo.MessageEmbed{
+		Title:       "Sorry I could not process your request 🤖 🔥",
+		Description: fmt.Sprintf("`-` Sorry an unexpected error occurred\n\n`-` If this continues to happen please join the [support channel](%s)", supportServerInvite),
+		Color:       0xd333ff,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: botGif,
+		},
+	}
 }

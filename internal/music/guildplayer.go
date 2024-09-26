@@ -3,6 +3,7 @@ package music
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	views "tunes/internal"
 	"tunes/internal/embeds"
@@ -22,19 +23,25 @@ const (
 
 type guildPlayer struct {
 	guildID     string
+	channelID   string
+	mu          sync.Mutex
 	voiceClient *discordgo.VoiceConnection
 	queue       []audiotype.TrackData
 	voiceState  VoiceState
 	queuePtr    int
 	stream      *dca.StreamingSession
+	doneChannel chan error
+	stopChannel chan bool
 }
 
-func NewGuildPlayer(vc *discordgo.VoiceConnection, guildID string) *guildPlayer {
+func NewGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID string) *guildPlayer {
 	return &guildPlayer{
 		voiceClient: vc,
 		guildID:     guildID,
+		channelID:   channelID,
 		queue:       []audiotype.TrackData{},
 		voiceState:  NotPlaying,
+		stopChannel: make(chan bool),
 		queuePtr:    0,
 	}
 }
@@ -65,8 +72,9 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	}
 
 	buttonsConfig := embeds.MusicPlayButtonsConfig{
-		SkipDisabled: !g.HasNext(),
-		BackDisabled: !g.HasPrevious(),
+		SkipDisabled:  !g.HasNext(),
+		BackDisabled:  !g.HasPrevious(),
+		ClearDisabled: !g.HasNext(),
 	}
 
 	musicPlayerButtons := embeds.GetMusicPlayerButtons(buttonsConfig)
@@ -94,8 +102,12 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 		switch messageCustomID {
 		case "SkipBtn":
 			g.Skip()
+			g.SendStopSignal()
 		case "BackBtn":
 			g.Rewind()
+			g.SendStopSignal()
+		case "ClearBtn":
+			g.ResetQueue()
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
@@ -127,12 +139,22 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 }
 
 func (g *guildPlayer) GetCurrentSong() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	return g.queue[g.queuePtr].Query
 }
 
 func (g *guildPlayer) ResetQueue() {
-	g.queue = []audiotype.TrackData{}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.queue = g.queue[:1]
 	g.queuePtr = 0
+}
+
+func (g *guildPlayer) AddTracks(data ...audiotype.TrackData) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.queue = append(g.queue, data...)
 }
 
 func (g *guildPlayer) HasNext() bool {
@@ -144,9 +166,17 @@ func (g *guildPlayer) HasPrevious() bool {
 }
 
 func (g *guildPlayer) Skip() {
-	g.queuePtr += 1
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.queuePtr++
+}
+
+func (g *guildPlayer) SendStopSignal() {
+	g.stopChannel <- true
 }
 
 func (g *guildPlayer) Rewind() {
-	g.queuePtr -= 1
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.queuePtr--
 }

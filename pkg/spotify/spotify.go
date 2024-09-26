@@ -158,13 +158,13 @@ func (s *SpotifyWrapper) handlePlaylistData(requesterName string, spotifyTrackID
 		wg     sync.WaitGroup
 		mu     sync.Mutex
 		offset int
-		limit  int = 50
+		limit  = 50
 	)
 
 	result, err := s.client.GetPlaylistTracksOpt(spotify.ID(spotifyTrackID), &spotify.Options{
 		Offset: &offset,
 		Limit:  &limit,
-	}, "items(track(name,href,album,artists(name,href,images))), next")
+	}, "items(track(name,href,album,artists,duration_ms(name,href,images))), next")
 	if err != nil {
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
