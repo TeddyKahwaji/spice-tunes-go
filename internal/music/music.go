@@ -137,7 +137,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 
 	file, err := util.DownloadFileToTempDirectory(downloadResult)
 	if err != nil {
-		return nil, fmt.Errorf("error downloading youtube content to temporary file: %w", err)
+		return nil, fmt.Errorf("downloading youtube content to temporary file: %w", err)
 	}
 
 	return file, nil
@@ -199,7 +199,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 					m.logger.Warn("error during audio stream", zap.Error(err))
 				}
 			}
-			fmt.Print("reached")
+
 			return nil
 
 		// receiving signal from stop channel indicates queue ptr has shifted

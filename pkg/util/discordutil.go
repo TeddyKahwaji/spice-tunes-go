@@ -30,6 +30,10 @@ func GetVoiceChannelMemberCount(session *discordgo.Session, guildID, channelID s
 
 	// Loop through VoiceStates to find all members in the specific voice channel
 	for _, vs := range guild.VoiceStates {
+		if vs == nil {
+			continue
+		}
+
 		if vs.ChannelID == channelID && (!vs.Member.User.Bot || vs.UserID == session.State.User.ID) {
 			memberCount++
 		}

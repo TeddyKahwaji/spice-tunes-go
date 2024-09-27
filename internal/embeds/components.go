@@ -45,7 +45,7 @@ func GetMusicPlayerButtons(config MusicPlayButtonsConfig) []discordgo.MessageCom
 					Disabled: config.ClearDisabled,
 					CustomID: "ClearBtn",
 					Label:    "Clear",
-					Style:    discordgo.SecondaryButton,
+					Style:    discordgo.DangerButton,
 					Emoji: &discordgo.ComponentEmoji{
 						Name: "🗑️", // Wastebasket emoji
 					},
