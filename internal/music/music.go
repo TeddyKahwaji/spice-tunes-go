@@ -325,6 +325,10 @@ func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo
 }
 
 func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.VoiceStateUpdate) {
+	if vc == nil {
+		return
+	}
+
 	hasLeft := vc.BeforeUpdate != nil && !vc.Member.User.Bot && vc.ChannelID == ""
 	if hasLeft {
 		channelMemberCount, err := util.GetVoiceChannelMemberCount(session, vc.BeforeUpdate.GuildID, vc.BeforeUpdate.ChannelID)

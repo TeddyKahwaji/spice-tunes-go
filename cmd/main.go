@@ -65,7 +65,7 @@ func writeNetrcFileContent() error {
 
 	netrcPath := fmt.Sprintf("%s/.netrc", homeDir)
 
-	if err := os.WriteFile(netrcPath, []byte(netrcContent), 0600); err != nil {
+	if err := os.WriteFile(netrcPath, []byte(netrcContent), 0o0600); err != nil {
 		return fmt.Errorf("writing netrc to file: %w", err)
 	}
 
