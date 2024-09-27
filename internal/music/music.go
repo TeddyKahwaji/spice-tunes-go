@@ -325,7 +325,7 @@ func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo
 }
 
 func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.VoiceStateUpdate) {
-	if vc == nil {
+	if vc == nil || session == nil {
 		return
 	}
 
