@@ -113,6 +113,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 			Type:       goutubedl.TypeSingle,
 			HTTPClient: m.httpClient,
 		}
+
 		downloadOptions = goutubedl.DownloadOptions{
 			Filter:            "best",
 			DownloadAudioOnly: true,
