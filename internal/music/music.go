@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
+	"regexp"
 	"time"
 
 	"tunes/internal/embeds"
@@ -18,7 +18,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
-	"github.com/wader/goutubedl"
+	"github.com/lrstanley/go-ytdlp"
 	"go.uber.org/zap"
 )
 
@@ -29,6 +29,7 @@ type musicPlayerCog struct {
 	guildVoiceStates map[string]*guildPlayer
 	spotifyClient    *spotify.SpotifyWrapper
 	ytSearchWrapper  *youtube.YoutubeSearchWrapper
+	ytPlayerClient   *ytdlp.Command
 }
 
 type TrackDataRetriever interface {
@@ -38,6 +39,7 @@ type TrackDataRetriever interface {
 type CogConfig struct {
 	Logger               *zap.Logger
 	HttpClient           *http.Client
+	YoutubePlayerClient  *ytdlp.Command
 	SpotifyWrapper       *spotify.SpotifyWrapper
 	YoutubeSearchWrapper *youtube.YoutubeSearchWrapper
 }
@@ -46,7 +48,8 @@ func NewMusicPlayerCog(config *CogConfig) (*musicPlayerCog, error) {
 	if config.Logger == nil ||
 		config.HttpClient == nil ||
 		config.SpotifyWrapper == nil ||
-		config.YoutubeSearchWrapper == nil {
+		config.YoutubeSearchWrapper == nil ||
+		config.YoutubePlayerClient == nil {
 		return nil, errors.New("config was populated with nil value")
 	}
 
@@ -58,6 +61,7 @@ func NewMusicPlayerCog(config *CogConfig) (*musicPlayerCog, error) {
 		guildVoiceStates: make(map[string]*guildPlayer),
 		spotifyClient:    config.SpotifyWrapper,
 		ytSearchWrapper:  config.YoutubeSearchWrapper,
+		ytPlayerClient:   config.YoutubePlayerClient,
 	}
 
 	go musicCog.globalPlay()
@@ -91,57 +95,34 @@ func (m *musicPlayerCog) globalPlay() {
 }
 
 func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
-	var (
-		options         goutubedl.Options
-		downloadOptions goutubedl.DownloadOptions
-	)
-
-	if strings.Contains(audioTrackName, "ytsearch") {
-		options = goutubedl.Options{
-			Type:       goutubedl.TypePlaylist,
-			HTTPClient: m.httpClient,
-		}
-
-		downloadOptions = goutubedl.DownloadOptions{
-			Filter:            "best",
-			DownloadAudioOnly: true,
-			PlaylistIndex:     1,
-		}
-
-	} else {
-		options = goutubedl.Options{
-			Type:       goutubedl.TypeSingle,
-			HTTPClient: m.httpClient,
-		}
-
-		downloadOptions = goutubedl.DownloadOptions{
-			Filter:            "best",
-			DownloadAudioOnly: true,
-		}
-	}
-
-	result, err := goutubedl.New(ctx, audioTrackName, options)
+	result, err := m.ytPlayerClient.Run(ctx, audioTrackName)
 	if err != nil {
 		return nil, fmt.Errorf("attempting to download from youtube: %w", err)
 	}
 
-	downloadResult, err := result.DownloadWithOptions(ctx, downloadOptions)
+	info, err := result.GetExtractedInfo()
 	if err != nil {
-		return nil, fmt.Errorf("downloading youtube data: %w", err)
+		return nil, fmt.Errorf("getting extracted info: %w", err)
+	} else if len(info) == 0 {
+		return nil, errors.New("no info data found")
 	}
 
-	defer func() {
-		if err := downloadResult.Close(); err != nil {
-			m.logger.Warn("couldn't close downloaded result", zap.Error(err))
+	for _, details := range info {
+		if details.Filename != nil {
+			re := regexp.MustCompile(`\..+$`)
+			filePath := re.ReplaceAllString(*details.Filename, ".mp3")
+
+			file, err := os.Open(filePath)
+			if err != nil {
+				return nil, fmt.Errorf("opening file from yt info: %w", err)
+			}
+
+			return file, nil
+
 		}
-	}()
-
-	file, err := util.DownloadFileToTempDirectory(downloadResult)
-	if err != nil {
-		return nil, fmt.Errorf("downloading youtube content to temporary file: %w", err)
 	}
 
-	return file, nil
+	return nil, errors.New("file name not found")
 }
 
 func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
