@@ -97,8 +97,8 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 		downloadOptions goutubedl.DownloadOptions
 	)
 
-	userName := `"oauth2"`
-	password := `""`
+	userName := "oauth2"
+	password := ""
 
 	if strings.Contains(audioTrackName, "ytsearch") {
 		options = goutubedl.Options{
