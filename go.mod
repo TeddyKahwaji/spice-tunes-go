@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/jonas747/dca v0.0.0-20210930103944-155f5e5f0cc7
-	github.com/lrstanley/go-ytdlp v0.0.0-20240928013056-38cb29e05880
+	github.com/wader/goutubedl v0.0.0-20240910081116-fed2a6ab45a3
 	github.com/zmb3/spotify v1.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.23.0
@@ -17,8 +17,6 @@ require (
 	cloud.google.com/go/auth v0.9.4 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
 	cloud.google.com/go/compute/metadata v0.5.1 // indirect
-	github.com/ProtonMail/go-crypto v1.0.0 // indirect
-	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
