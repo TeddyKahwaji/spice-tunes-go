@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +15,7 @@ import (
 	"tunes/pkg/youtube"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/lrstanley/go-ytdlp"
 	"github.com/zmb3/spotify"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/clientcredentials"
@@ -53,23 +53,15 @@ func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret 
 	return sw.NewSpotifyWrapper(&client)
 }
 
-func writeNetrcFileContent() error {
-	netrcLogin := os.Getenv("YOUTUBE_USER_NAME")
-	netrcPassword := os.Getenv("YOUTUBE_PASSWORD")
-	netrcContent := fmt.Sprintf("machine youtube login %s password %s", netrcLogin, netrcPassword)
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Unable to find home directory: %v", err)
-	}
-
-	netrcPath := fmt.Sprintf("%s/.netrc", homeDir)
-
-	if err := os.WriteFile(netrcPath, []byte(netrcContent), 0o0600); err != nil {
-		return fmt.Errorf("writing netrc to file: %w", err)
-	}
-
-	return nil
+func newYoutubePlayerClient() *ytdlp.Command {
+	return ytdlp.New().
+		DefaultSearch("ytsearch").
+		ExtractAudio().
+		RecodeVideo("mp3").
+		Output("%(extractor)s - %(title)s.mp3").
+		NoKeepVideo().
+		PrintJSON().
+		Continue()
 }
 
 func main() {
@@ -112,9 +104,6 @@ func main() {
 
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
 		ctx := context.Background()
-		if err := writeNetrcFileContent(); err != nil {
-			logger.Fatal("writing netrc failed", zap.Error(err))
-		}
 
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
 		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, creds)
@@ -122,9 +111,12 @@ func main() {
 			logger.Fatal("unable to instantiate youtubeWrapperClient", zap.Error(err))
 		}
 
+		youtubePlayerClient := newYoutubePlayerClient()
+
 		musicCogConfig := &music.CogConfig{
 			HttpClient:           &httpClient,
 			SpotifyWrapper:       spotifyWrapper,
+			YoutubePlayerClient:  youtubePlayerClient,
 			Logger:               logger,
 			YoutubeSearchWrapper: youtubeSearchWrapper,
 		}
