@@ -587,6 +587,7 @@ func (result Result) DownloadWithOptions(
 	cmd := exec.CommandContext(
 		ctx,
 		ProbePath(),
+		"--verbose",
 		// see comment below about ignoring errors for playlists
 		"--ignore-errors",
 		// TODO: deprecated in yt-dlp?
@@ -642,6 +643,14 @@ func (result Result) DownloadWithOptions(
 
 	if options.PlaylistIndex > 0 {
 		cmd.Args = append(cmd.Args, "--playlist-items", fmt.Sprint(options.PlaylistIndex))
+	}
+
+	if result.Options.Username != nil {
+		cmd.Args = append(cmd.Args, "--username", *result.Options.Username)
+	}
+
+	if result.Options.Password != nil {
+		cmd.Args = append(cmd.Args, "--password", *result.Options.Password)
 	}
 
 	if options.DownloadAudioOnly {
