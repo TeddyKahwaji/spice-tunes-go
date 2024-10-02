@@ -51,11 +51,10 @@ func NewMusicPlayerCog(config *CogConfig) (*musicPlayerCog, error) {
 		return nil, errors.New("config was populated with nil value")
 	}
 
-	songSignals := make(chan *guildPlayer)
 	musicCog := &musicPlayerCog{
 		httpClient:       config.HttpClient,
 		logger:           config.Logger,
-		songSignal:       songSignals,
+		songSignal:       make(chan *guildPlayer),
 		guildVoiceStates: make(map[string]*guildPlayer),
 		spotifyClient:    config.SpotifyWrapper,
 		ytSearchWrapper:  config.YoutubeSearchWrapper,
