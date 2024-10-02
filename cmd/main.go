@@ -92,7 +92,7 @@ func main() {
 
 	bot.AddHandler(func(session *discordgo.Session, _ *discordgo.Ready) {
 		ctx := context.Background()
-		
+
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
 		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, creds)
 		if err != nil {
