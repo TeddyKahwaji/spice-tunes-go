@@ -632,9 +632,6 @@ func (result Result) DownloadWithOptions(
 		cmd.Args = append(cmd.Args, "-4")
 	}
 
-	cmd.Args = append(cmd.Args, "--username", "oauth2")
-	fmt.Print("here")
-	cmd.Args = append(cmd.Args, "--password", "")
 	// don't need to specify if direct as there is only one
 	// also seems to be issues when using filter with generic extractor
 	if !result.Info.Direct && options.Filter != "" {
