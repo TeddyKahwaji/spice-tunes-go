@@ -25,15 +25,6 @@ RUN apt-get update && \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2024.09.27/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+x /usr/local/bin/yt-dlp
 
-RUN mkdir -p ~/.config/yt-dlp/plugins/
-
-# Install yt-dlp OAuth2 plugin
-RUN curl -L https://github.com/coletdjnz/yt-dlp-youtube-oauth2/releases/download/v2024.9.14/yt-dlp-youtube-oauth2.zip -o /usr/local/bin/yt-dlp-oauth2.zip && \
-    mkdir -p ~/.config/yt-dlp-plugins/something/ && \
-    unzip /usr/local/bin/yt-dlp-oauth2.zip -d ~/.config/yt-dlp-plugins/something/ && \
-    chmod -R a+x ~/.config/yt-dlp/plugins/ && \
-    rm /usr/local/bin/yt-dlp-oauth2.zip
-
 COPY --from=builder /go/bin/app /go/bin/app
 
 

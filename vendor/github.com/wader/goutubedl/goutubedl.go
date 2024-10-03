@@ -223,6 +223,7 @@ type Options struct {
 	Downloader         string // --downloader
 	DownloadThumbnail  bool
 	DownloadSubtitles  bool
+	POToken            string
 	DownloadSections   string // --download-sections
 	Impersonate        string // --impersonate
 	Username           *string
@@ -321,6 +322,10 @@ func infoFromURL(
 
 	if options.ProxyUrl != "" {
 		cmd.Args = append(cmd.Args, "--proxy", options.ProxyUrl)
+	}
+
+	if options.POToken != "" {
+		cmd.Args = append(cmd.Args, "--extractor-args", fmt.Sprintf("youtube:player-client=web,default;po_token=web+%s", options.POToken))
 	}
 
 	if options.UseIPV4 {
@@ -644,6 +649,10 @@ func (result Result) DownloadWithOptions(
 
 	if result.Options.Username != nil {
 		cmd.Args = append(cmd.Args, "--username", *result.Options.Username)
+	}
+
+	if result.Options.POToken != "" {
+		cmd.Args = append(cmd.Args, "--extractor-args", fmt.Sprintf("youtube:player-client=web,default;po_token=web+%s", result.Options.POToken))
 	}
 
 	if result.Options.Password != nil {
