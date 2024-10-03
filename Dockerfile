@@ -22,7 +22,7 @@ RUN apt-get update && \
     apt-get clean autoclean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -L https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2024.09.27.232842/yt-dlp -o /usr/local/bin/yt-dlp \
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2024.09.27/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+x /usr/local/bin/yt-dlp
 
 RUN mkdir -p ~/.config/yt-dlp/plugins/
