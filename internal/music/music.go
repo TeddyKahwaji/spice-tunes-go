@@ -100,11 +100,12 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 
 	if strings.Contains(audioTrackName, "ytsearch") {
 		options = goutubedl.Options{
-			Type:       goutubedl.TypePlaylist,
-			HTTPClient: m.httpClient,
-			POToken:    poToken,
-			DebugLog:   zap.NewStdLog(m.logger),
-			StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
+			Type:               goutubedl.TypePlaylist,
+			HTTPClient:         m.httpClient,
+			POToken:            poToken,
+			CookiesFromBrowser: "chrome",
+			DebugLog:           zap.NewStdLog(m.logger),
+			StderrFn:           func(cmd *exec.Cmd) io.Writer { return os.Stderr },
 		}
 
 		downloadOptions = goutubedl.DownloadOptions{
@@ -115,11 +116,12 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 
 	} else {
 		options = goutubedl.Options{
-			Type:       goutubedl.TypeSingle,
-			HTTPClient: m.httpClient,
-			POToken:    poToken,
-			DebugLog:   zap.NewStdLog(m.logger),
-			StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
+			Type:               goutubedl.TypeSingle,
+			HTTPClient:         m.httpClient,
+			POToken:            poToken,
+			CookiesFromBrowser: "chrome",
+			DebugLog:           zap.NewStdLog(m.logger),
+			StderrFn:           func(cmd *exec.Cmd) io.Writer { return os.Stderr },
 		}
 
 		downloadOptions = goutubedl.DownloadOptions{
