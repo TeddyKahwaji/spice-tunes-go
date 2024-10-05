@@ -96,11 +96,16 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 		downloadOptions goutubedl.DownloadOptions
 	)
 
+	userName := "oauth"
+	password := ""
+
 	if strings.Contains(audioTrackName, "ytsearch") {
 		options = goutubedl.Options{
 			Type:       goutubedl.TypePlaylist,
 			HTTPClient: m.httpClient,
 			DebugLog:   zap.NewStdLog(m.logger),
+			Username:   &userName,
+			Password:   &password,
 			StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
 		}
 
@@ -115,6 +120,8 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 			Type:       goutubedl.TypeSingle,
 			HTTPClient: m.httpClient,
 			DebugLog:   zap.NewStdLog(m.logger),
+			Username:   &userName,
+			Password:   &password,
 			StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
 		}
 
