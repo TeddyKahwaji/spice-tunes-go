@@ -50,6 +50,39 @@ func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 	}
 }
 
+func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, position int) *discordgo.MessageEmbed {
+	baseMessageEmbed := discordgo.MessageEmbed{
+		Color: 0xd5a7b4,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    "Added by " + member.User.Username,
+			IconURL: member.AvatarURL(""),
+		},
+	}
+
+	if len(trackData.Tracks) > 1 {
+		// TODO: Handle multi track type
+	} else {
+		addedTrack := trackData.Tracks[0]
+
+		baseMessageEmbed.Thumbnail = &discordgo.MessageEmbedThumbnail{
+			URL: addedTrack.TrackImageURL,
+		}
+
+		baseMessageEmbed.Description = fmt.Sprintf("**%s** added to queue", addedTrack.TrackName)
+		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
+			Name:  "**Position in queue**",
+			Value: fmt.Sprintf("`%d`", position),
+		})
+
+		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
+			Name:  "**Duration**",
+			Value: fmt.Sprintf("`%s`", audiotype.FormatDuration(addedTrack.Duration)),
+		})
+	}
+
+	return &baseMessageEmbed
+}
+
 func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Description: content,

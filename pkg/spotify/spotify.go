@@ -12,17 +12,17 @@ import (
 	"github.com/zmb3/spotify"
 )
 
-type SpotifyWrapper struct {
+type SpotifyClientWrapper struct {
 	client *spotify.Client
 }
 
-func NewSpotifyWrapper(client *spotify.Client) *SpotifyWrapper {
-	return &SpotifyWrapper{
+func NewSpotifyClientWrapper(client *spotify.Client) *SpotifyClientWrapper {
+	return &SpotifyClientWrapper{
 		client: client,
 	}
 }
 
-func (s *SpotifyWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
+func (s *SpotifyClientWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
 	var (
 		result *audiotype.Data
 		err    error
@@ -65,7 +65,7 @@ func (s *SpotifyWrapper) GetTracksData(ctx context.Context, audioType audiotype.
 	return result, err
 }
 
-func (s *SpotifyWrapper) handleSingleTrackData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
+func (s *SpotifyClientWrapper) handleSingleTrackData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	trackData := make([]audiotype.TrackData, 0, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
@@ -88,14 +88,13 @@ func (s *SpotifyWrapper) handleSingleTrackData(requesterName string, spotifyTrac
 	}, nil
 }
 
-func (s *SpotifyWrapper) handleAlbumData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
-	trackData := []audiotype.TrackData{}
-
+func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	var (
 		wg sync.WaitGroup
 		mu sync.Mutex
 	)
 
+	trackData := []audiotype.TrackData{}
 	result, err := s.client.GetAlbum(spotify.ID(spotifyTrackID))
 	if err != nil {
 		return nil, fmt.Errorf("getting album track items: %w", err)
@@ -130,7 +129,6 @@ func (s *SpotifyWrapper) handleAlbumData(requesterName string, spotifyTrackID st
 
 		if result.Tracks.Next == "" {
 			wg.Wait()
-
 			break
 		}
 
@@ -151,15 +149,15 @@ func (s *SpotifyWrapper) handleAlbumData(requesterName string, spotifyTrackID st
 	}, nil
 }
 
-func (s *SpotifyWrapper) handlePlaylistData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
-	trackData := []audiotype.TrackData{}
-
+func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	var (
 		wg     sync.WaitGroup
 		mu     sync.Mutex
 		offset int
 		limit  = 50
 	)
+
+	trackData := []audiotype.TrackData{}
 
 	result, err := s.client.GetPlaylistTracksOpt(spotify.ID(spotifyTrackID), &spotify.Options{
 		Offset: &offset,
@@ -242,7 +240,6 @@ func extractSpotifyID(audioType audiotype.SupportedAudioType, spotifyURL string)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
-
 	}
 
 	return "", errors.New("error could not extract any ID")

@@ -1,7 +1,6 @@
 package views
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -43,32 +42,25 @@ func WithDeletion(deletionTimer *time.Duration) ViewConfigOpts {
 	}
 }
 
-type view struct {
+type View struct {
 	viewConfig ViewConfig
-	messageID  string
+	MessageID  string
+	ChannelID  string
 }
 
 type Handler func(*discordgo.Interaction) error
 
-func NewView(viewConfig ViewConfig, opts ...ViewConfigOpts) *view {
+func NewView(viewConfig ViewConfig, opts ...ViewConfigOpts) *View {
 	for _, opt := range opts {
 		opt(&viewConfig)
 	}
 
-	return &view{
+	return &View{
 		viewConfig: viewConfig,
 	}
 }
 
-func (v *view) EditView() error {
-	if v.messageID == "" {
-		return errors.New("no view message has previously been sent")
-	}
-
-	return nil
-}
-
-func (v *view) SendView(interaction *discordgo.Interaction, session *discordgo.Session, handler Handler) error {
+func (v *View) SendView(interaction *discordgo.Interaction, session *discordgo.Session, handler Handler) error {
 	config := v.viewConfig
 	channelID := interaction.ChannelID
 
@@ -117,7 +109,9 @@ func (v *view) SendView(interaction *discordgo.Interaction, session *discordgo.S
 	}
 
 	session.AddHandler(componentHandler)
-	v.messageID = message.ID
+
+	v.MessageID = message.ID
+	v.ChannelID = message.ChannelID
 
 	return nil
 }

@@ -6,23 +6,26 @@ import (
 	"sync"
 	"sync/atomic"
 
-	views "tunes/internal"
 	"tunes/internal/embeds"
 	"tunes/pkg/audiotype"
+	"tunes/pkg/views"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 )
 
-type VoiceState string
+type voiceState string
 
 const (
-	Playing    VoiceState = "PLAYING"
-	Paused     VoiceState = "PAUSED"
-	NotPlaying VoiceState = "NOT_PLAYING"
+	playing    voiceState = "PLAYING"
+	paused     voiceState = "PAUSED"
+	notPlaying voiceState = "NOT_PLAYING"
 )
 
-var ErrStreamNonExistent = errors.New("no stream exists")
+var (
+	errStreamNonExistent = errors.New("no stream exists")
+	errNoMusicPlayerView = errors.New("guild player does not have a music player view")
+)
 
 type guildPlayer struct {
 	guildID     string
@@ -30,22 +33,27 @@ type guildPlayer struct {
 	mu          sync.Mutex
 	voiceClient *discordgo.VoiceConnection
 	queue       []audiotype.TrackData
-	voiceState  VoiceState
+	voiceState  voiceState
 	queuePtr    atomic.Int32
 	stream      *dca.StreamingSession
 	doneChannel chan error
 	stopChannel chan bool
+	view        *views.View
 }
 
-func NewGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID string) *guildPlayer {
+func newGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID string) *guildPlayer {
 	return &guildPlayer{
 		voiceClient: vc,
 		guildID:     guildID,
 		channelID:   channelID,
 		queue:       []audiotype.TrackData{},
-		voiceState:  NotPlaying,
+		voiceState:  notPlaying,
 		stopChannel: make(chan bool),
 	}
+}
+
+func (g *guildPlayer) hasView() bool {
+	return g.view != nil
 }
 
 func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
@@ -53,7 +61,7 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 
 	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack)
 
-	if g.HasNext() {
+	if g.hasNext() {
 		musicPlayerEmbed.Fields = append(musicPlayerEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "`Up Next:`",
 			Value:  g.queue[g.queuePtr.Load()+1].TrackName,
@@ -61,7 +69,7 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 		})
 	}
 
-	if g.HasPrevious() {
+	if g.hasPrevious() {
 		musicPlayerEmbed.Fields = append(musicPlayerEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "`Previous Song:`",
 			Value:  g.queue[g.queuePtr.Load()-1].TrackName,
@@ -74,10 +82,10 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	}
 
 	buttonsConfig := embeds.MusicPlayButtonsConfig{
-		SkipDisabled:  !g.HasNext(),
-		BackDisabled:  !g.HasPrevious(),
-		ClearDisabled: !g.HasNext(),
-		Resume:        g.IsPaused(),
+		SkipDisabled:  !g.hasNext(),
+		BackDisabled:  !g.hasPrevious(),
+		ClearDisabled: !g.hasNext(),
+		Resume:        g.isPaused(),
 	}
 
 	musicPlayerButtons := embeds.GetMusicPlayerButtons(buttonsConfig)
@@ -90,9 +98,9 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	}
 }
 
-func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session) error {
+func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session) error {
 	if len(g.queue) == 0 {
-		return errors.New("cannot generating music player with empty queue")
+		return errors.New("cannot generate music player with empty queue")
 	}
 
 	viewConfig := g.getMusicPlayerViewConfig()
@@ -104,24 +112,24 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 
 		switch messageCustomID {
 		case "SkipBtn":
-			g.Skip()
-			g.SendStopSignal()
+			g.skip()
+			g.sendStopSignal()
 		case "PauseResumeBtn":
-			if !g.IsPaused() {
-				if err := g.Pause(); err != nil {
+			if !g.isPaused() {
+				if err := g.pause(); err != nil {
 					return fmt.Errorf("pausing: %w", err)
 				}
 			} else {
-				if err := g.Resume(); err != nil {
+				if err := g.resume(); err != nil {
 					return fmt.Errorf("resuming: %w", err)
 				}
 			}
 
 		case "BackBtn":
-			g.Rewind()
-			g.SendStopSignal()
+			g.rewind()
+			g.sendStopSignal()
 		case "ClearBtn":
-			g.ResetQueue()
+			g.resetQueue()
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
@@ -149,86 +157,133 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 		return fmt.Errorf("sending music player view: %w", err)
 	}
 
+	g.view = musicPlayerView
+
 	return nil
 }
 
-func (g *guildPlayer) GetCurrentSong() string {
+func (g *guildPlayer) refreshState(session *discordgo.Session) error {
+	if g.view == nil {
+		return errNoMusicPlayerView
+	}
+
+	viewConfig := g.getMusicPlayerViewConfig()
+
+	_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:         g.view.MessageID,
+		Channel:    g.view.ChannelID,
+		Components: &viewConfig.Components.MessageComponents,
+		Embeds:     &viewConfig.Embeds,
+	})
+	if err != nil {
+		return fmt.Errorf("editing complex message: %w", err)
+	}
+
+	return nil
+}
+
+func (g *guildPlayer) destroyView(session *discordgo.Session) error {
+	if g.view == nil {
+		return nil
+	}
+
+	defer func() {
+		g.view = nil
+	}()
+
+	if err := session.ChannelMessageDelete(g.view.ChannelID, g.view.MessageID); err != nil {
+		return fmt.Errorf("deleting message: %w", err)
+	}
+
+	return nil
+}
+
+func (g *guildPlayer) getCurrentSong() string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
 	return g.queue[g.queuePtr.Load()].Query
 }
 
-func (g *guildPlayer) ResetQueue() {
+func (g *guildPlayer) getCurrentPointer() int {
+	return int(g.queuePtr.Load())
+}
+
+func (g *guildPlayer) resetQueue() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.queue = g.queue[:0]
 	g.queuePtr.Store(0)
 }
 
-func (g *guildPlayer) SetVoiceState(voiceState VoiceState) {
+func (g *guildPlayer) setVoiceState(voiceState voiceState) {
 	g.voiceState = voiceState
 }
 
-func (g *guildPlayer) IsPlaying() bool {
-	return g.voiceState == Playing
+func (g *guildPlayer) isPlaying() bool {
+	return g.voiceState == playing
 }
 
-func (g *guildPlayer) IsPaused() bool {
-	return g.voiceState == Paused
+func (g *guildPlayer) isPaused() bool {
+	return g.voiceState == paused
 }
 
-func (g *guildPlayer) IsNotActive() bool {
-	return g.voiceState == NotPlaying
+func (g *guildPlayer) isNotActive() bool {
+	return g.voiceState == notPlaying
 }
 
-func (g *guildPlayer) AddTracks(data ...audiotype.TrackData) {
+func (g *guildPlayer) addTracks(data ...audiotype.TrackData) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.queue = append(g.queue, data...)
 }
 
-func (g *guildPlayer) HasNext() bool {
+func (g *guildPlayer) hasNext() bool {
 	return int(g.queuePtr.Load())+1 < len(g.queue)
 }
 
-func (g *guildPlayer) IsEmptyQueue() bool {
+func (g *guildPlayer) isEmptyQueue() bool {
 	return len(g.queue) == 0
 }
 
-func (g *guildPlayer) Pause() error {
+func (g *guildPlayer) pause() error {
 	if g.stream == nil {
-		return ErrStreamNonExistent
+		return errStreamNonExistent
 	}
 
 	g.stream.SetPaused(true)
-	g.voiceState = Paused
+	g.voiceState = paused
 
 	return nil
 }
 
-func (g *guildPlayer) Resume() error {
+func (g *guildPlayer) getQueueLength() int {
+	return len(g.queue) - g.getCurrentPointer()
+}
+
+func (g *guildPlayer) resume() error {
 	if g.stream == nil {
-		return ErrStreamNonExistent
+		return errStreamNonExistent
 	}
 
 	g.stream.SetPaused(false)
-	g.voiceState = Playing
+	g.voiceState = playing
 
 	return nil
 }
 
-func (g *guildPlayer) HasPrevious() bool {
+func (g *guildPlayer) hasPrevious() bool {
 	return g.queuePtr.Load()-1 >= 0
 }
 
-func (g *guildPlayer) Skip() {
+func (g *guildPlayer) skip() {
 	_ = g.queuePtr.Add(1)
 }
 
-func (g *guildPlayer) SendStopSignal() {
+func (g *guildPlayer) sendStopSignal() {
 	g.stopChannel <- true
 }
 
-func (g *guildPlayer) Rewind() {
+func (g *guildPlayer) rewind() {
 	_ = g.queuePtr.Add(-1)
 }

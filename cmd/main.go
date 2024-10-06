@@ -39,7 +39,7 @@ func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Sess
 	return bot, nil
 }
 
-func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret string) *sw.SpotifyWrapper {
+func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret string) *sw.SpotifyClientWrapper {
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -49,7 +49,7 @@ func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret 
 	tokenClient := config.Client(ctx)
 	client := spotify.NewClient(tokenClient)
 
-	return sw.NewSpotifyWrapper(&client)
+	return sw.NewSpotifyClientWrapper(&client)
 }
 
 func main() {
@@ -94,13 +94,15 @@ func main() {
 		ctx := context.Background()
 
 		spotifyWrapper := newSpotifyWrapperClient(ctx, clientID, clientSecret)
+
 		youtubeSearchWrapper, err := youtube.NewYoutubeSearchWrapper(ctx, creds)
 		if err != nil {
 			logger.Fatal("unable to instantiate youtubeWrapperClient", zap.Error(err))
 		}
 
 		musicCogConfig := &music.CogConfig{
-			HttpClient:           &httpClient,
+			Session:              session,
+			HTTPClient:           &httpClient,
 			SpotifyWrapper:       spotifyWrapper,
 			Logger:               logger,
 			YoutubeSearchWrapper: youtubeSearchWrapper,
