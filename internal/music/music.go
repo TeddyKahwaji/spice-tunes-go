@@ -552,6 +552,49 @@ func (m *musicPlayerCog) rewind(session *discordgo.Session, interaction *discord
 	return nil
 }
 
+func (m *musicPlayerCog) clear(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || !guildPlayer.hasNext() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("There is no queue to clear")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	guildPlayer.queue = guildPlayer.queue[:1]
+
+	if err := guildPlayer.refreshState(session); err != nil {
+		m.logger.Warn("unable to refresh music view state", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
+	}
+
+	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Embeds: embeds.MusicPlayerActionEmbed("💥 **Cleared...** ⏹", *interaction.Member),
+	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
 func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 	if interaction.Type != discordgo.InteractionApplicationCommand {
 		return
@@ -568,6 +611,8 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 		err = m.pause(session, interaction)
 	case "rewind":
 		err = m.rewind(session, interaction)
+	case "clear":
+		err = m.clear(session, interaction)
 	}
 
 	if err != nil {

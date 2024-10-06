@@ -27,4 +27,8 @@ var musicPlayerCommands = []*discordgo.ApplicationCommand{
 		Name:        "rewind",
 		Description: "Rewinds to the previous track in the queue",
 	},
+	{
+		Name:        "clear",
+		Description: "Clears the entire music queue",
+	},
 }
