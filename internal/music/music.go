@@ -84,7 +84,7 @@ func (m *musicPlayerCog) globalPlay() {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					m.logger.Warn("recovery occurred when executing play audio")
+					m.logger.Warn("recovered from panic that occurred on playAudio", zap.String("guild_id", gp.guildID))
 				}
 			}()
 

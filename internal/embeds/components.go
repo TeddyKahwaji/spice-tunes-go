@@ -17,7 +17,7 @@ func GetMusicPlayerButtons(config MusicPlayButtonsConfig) []discordgo.MessageCom
 		Label:    "Pause",
 		Style:    discordgo.SecondaryButton,
 		Emoji: &discordgo.ComponentEmoji{
-			Name: "⏸", // Pause emoji
+			Name: "⏸",
 		},
 	}
 
