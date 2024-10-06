@@ -6,13 +6,16 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"tunes/internal/embeds"
 	"tunes/pkg/audiotype"
+	"tunes/pkg/util"
 	"tunes/pkg/views"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
+	"go.uber.org/zap"
 )
 
 type voiceState string
@@ -99,20 +102,22 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	}
 }
 
-func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session) error {
+func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
 	if len(g.queue) == 0 {
 		return errors.New("cannot generate music player with empty queue")
 	}
 
 	viewConfig := g.getMusicPlayerViewConfig()
-	musicPlayerView := views.NewView(viewConfig)
+	musicPlayerView := views.NewView(viewConfig, views.WithLogger(logger))
 
 	handler := func(passedInteraction *discordgo.Interaction) error {
+		var actionMessage string
 		messageID := passedInteraction.Message.ID
 		messageCustomID := passedInteraction.MessageComponentData().CustomID
 
 		switch messageCustomID {
 		case "SkipBtn":
+			actionMessage = "⏩ ***Track skipped*** 👍"
 			g.skip()
 			g.sendStopSignal()
 		case "PauseResumeBtn":
@@ -120,17 +125,23 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 				if err := g.pause(); err != nil {
 					return fmt.Errorf("pausing: %w", err)
 				}
+
+				actionMessage = "**Paused** ⏸️"
 			} else {
 				if err := g.resume(); err != nil {
 					return fmt.Errorf("resuming: %w", err)
 				}
+
+				actionMessage = "⏯️ **Resuming** 👍"
 			}
 
 		case "BackBtn":
 			g.rewind()
 			g.sendStopSignal()
+			actionMessage = "⏪ ***Rewind*** 👍"
 		case "ClearBtn":
 			g.clearUpcomingTracks()
+			actionMessage = "💥 **Cleared...** ⏹"
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
@@ -144,11 +155,19 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		if err != nil {
 			return fmt.Errorf("editing complex message: %w", err)
 		}
-
 		if err := session.InteractionRespond(passedInteraction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 		}); err != nil {
 			return fmt.Errorf("sending update message: %w", err)
+		}
+
+		message, err := session.ChannelMessageSendEmbed(passedInteraction.ChannelID, embeds.MusicPlayerActionEmbed(actionMessage, *interaction.Member))
+		if err != nil {
+			return fmt.Errorf("sending action initiated message: %w", err)
+		}
+
+		if err := util.DeleteMessageAfterTime(session, passedInteraction.ChannelID, message.ID, 30*time.Second); err != nil {
+			return fmt.Errorf("deleting message after time: %w", err)
 		}
 
 		return nil
@@ -211,7 +230,7 @@ func (g *guildPlayer) getCurrentPointer() int {
 }
 
 // unlike resetQueue, this resets the queue to
-// only contain elements up to the queue ptr
+// only contain elements up to the queue ptr.
 func (g *guildPlayer) clearUpcomingTracks() {
 	g.mu.Lock()
 	defer g.mu.Unlock()

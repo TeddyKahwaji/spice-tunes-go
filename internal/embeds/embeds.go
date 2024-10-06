@@ -9,11 +9,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const (
+	LightPink int = 0xd5a7b4
+	Brown     int = 0x992D22
+	Purple    int = 0xd333ff
+)
+
 func ErrorMessageEmbed(msg string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "❌ **Invalid usage**",
 		Description: msg,
-		Color:       0x992D22,
+		Color:       Brown,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: "https://media.giphy.com/media/S5tkhUBHTTWh865paS/giphy.gif",
 		},
@@ -24,7 +30,7 @@ func NotFoundEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Search Query Has No Results",
 		Description: "Sorry, I couldn't find any results for your search.\n\nPlease provide a direct `YouTube` or `Spotify` link.",
-		Color:       0xd5a7b4,
+		Color:       LightPink,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: "https://media.giphy.com/media/piL4e4WusrA4S0KODK/giphy.gif",
 		},
@@ -35,7 +41,7 @@ func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Now Playing 🎵",
 		Description: trackData.TrackName,
-		Color:       0xd5a7b4,
+		Color:       LightPink,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "`Length:`",
@@ -53,10 +59,10 @@ func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 
 // This function will return the added songs message embed to the user
 // if the added data was a playlist & the playlist metadata field is nil it will
-// return an error
+// return an error.
 func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, position int) (*discordgo.MessageEmbed, error) {
 	baseMessageEmbed := discordgo.MessageEmbed{
-		Color: 0xd5a7b4,
+		Color: LightPink,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    "Added by " + member.User.Username,
 			IconURL: member.AvatarURL(""),
@@ -108,7 +114,7 @@ func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, posit
 func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Description: content,
-		Color:       0xd5a7b4,
+		Color:       LightPink,
 		Footer: &discordgo.MessageEmbedFooter{
 			IconURL: member.AvatarURL(""),
 			Text:    "Action initiated by " + member.User.Username,
@@ -123,7 +129,7 @@ func UnexpectedErrorEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Sorry I could not process your request 🤖 🔥",
 		Description: fmt.Sprintf("`-` Sorry an unexpected error occurred\n\n`-` If this continues to happen please join the [support channel](%s)", supportServerInvite),
-		Color:       0xd333ff,
+		Color:       Purple,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: botGif,
 		},

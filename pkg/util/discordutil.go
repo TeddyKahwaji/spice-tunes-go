@@ -56,6 +56,7 @@ type FlagWrapper struct {
 type MessageData struct {
 	Embeds      *discordgo.MessageEmbed
 	FlagWrapper *FlagWrapper
+	Type        discordgo.InteractionResponseType
 }
 
 func WithDeletion(deletionTimer time.Duration, channelID string) SendMessageOpt {
@@ -95,7 +96,7 @@ func SendMessage(session *discordgo.Session, interaction *discordgo.Interaction,
 		}
 
 		err := session.InteractionRespond(interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Type: msgData.Type,
 			Data: params,
 		})
 		if err != nil {

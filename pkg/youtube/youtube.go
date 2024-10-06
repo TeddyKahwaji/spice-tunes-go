@@ -237,6 +237,7 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 				}
 
 				fullURL := YoutubeVideoBase + videoID
+
 				title := item.Snippet.Title
 				if item.ContentDetails.StartAt != "" && item.ContentDetails.EndAt != "" {
 					startAt := item.ContentDetails.StartAt

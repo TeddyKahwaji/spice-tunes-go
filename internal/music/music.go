@@ -274,6 +274,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 		if errors.Is(err, audiotype.ErrSearchQueryNotFound) {
 			msgData := util.MessageData{
 				Embeds: embeds.NotFoundEmbed(),
+				Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			}
 
 			err := util.SendMessage(session, interaction.Interaction, true, msgData, util.WithDeletion(10*time.Second, interaction.ChannelID))
@@ -311,7 +312,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			return fmt.Errorf("sending message: %w", err)
 		}
 	} else {
-		if err := guildPlayer.generateMusicPlayerView(interaction.Interaction, session); err != nil {
+		if err := guildPlayer.generateMusicPlayerView(interaction.Interaction, session, m.logger); err != nil {
 			m.logger.Error("unable to generate music player view", zap.Error(err), zap.String("guild_id", interaction.GuildID))
 		}
 	}
@@ -327,6 +328,7 @@ func (m *musicPlayerCog) verifyInChannelAndSendError(session *discordgo.Session,
 			invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("%s, you must be in a voice channel.", interaction.Member.User.Username))
 			msgData := util.MessageData{
 				Embeds: invalidUsageEmbed,
+				Type:   discordgo.InteractionResponseChannelMessageWithSource,
 				FlagWrapper: &util.FlagWrapper{
 					Flags: discordgo.MessageFlagsEphemeral,
 				},
@@ -361,6 +363,7 @@ func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
 		msgData := util.MessageData{
 			Embeds: invalidUsageEmbed,
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
 			},
@@ -390,6 +393,7 @@ func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
 		Embeds: embeds.MusicPlayerActionEmbed("⏩ ***Track skipped*** 👍", *interaction.Member),
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}
@@ -449,6 +453,7 @@ func (m *musicPlayerCog) pause(session *discordgo.Session, interaction *discordg
 	if !ok || guildPlayer.isEmptyQueue() {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
 		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			Embeds: invalidUsageEmbed,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
@@ -467,6 +472,7 @@ func (m *musicPlayerCog) pause(session *discordgo.Session, interaction *discordg
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("The music is already paused")
 		msgData := util.MessageData{
 			Embeds: invalidUsageEmbed,
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
 			},
@@ -491,6 +497,7 @@ func (m *musicPlayerCog) pause(session *discordgo.Session, interaction *discordg
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
 		Embeds: embeds.MusicPlayerActionEmbed("**Paused** ⏸️", *interaction.Member),
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}
@@ -513,6 +520,7 @@ func (m *musicPlayerCog) rewind(session *discordgo.Session, interaction *discord
 	if !ok || guildPlayer.isEmptyQueue() {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
 		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			Embeds: invalidUsageEmbed,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
@@ -530,6 +538,7 @@ func (m *musicPlayerCog) rewind(session *discordgo.Session, interaction *discord
 	if !guildPlayer.hasPrevious() {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("There is no previous track to go back to")
 		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			Embeds: invalidUsageEmbed,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
@@ -552,6 +561,7 @@ func (m *musicPlayerCog) rewind(session *discordgo.Session, interaction *discord
 	}
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 		Embeds: embeds.MusicPlayerActionEmbed("⏪ ***Rewind*** 👍", *interaction.Member),
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
@@ -574,6 +584,7 @@ func (m *musicPlayerCog) shuffle(session *discordgo.Session, interaction *discor
 	if !ok || guildPlayer.isEmptyQueue() {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("You can't shuffle an empty queue")
 		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			Embeds: invalidUsageEmbed,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
@@ -595,6 +606,7 @@ func (m *musicPlayerCog) shuffle(session *discordgo.Session, interaction *discor
 	}
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 		Embeds: embeds.MusicPlayerActionEmbed("**Shuffled queue** 👌", *interaction.Member),
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
@@ -617,6 +629,7 @@ func (m *musicPlayerCog) clear(session *discordgo.Session, interaction *discordg
 	if !ok || !guildPlayer.hasNext() {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("There is no queue to clear")
 		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			Embeds: invalidUsageEmbed,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,
@@ -638,7 +651,48 @@ func (m *musicPlayerCog) clear(session *discordgo.Session, interaction *discordg
 	}
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 		Embeds: embeds.MusicPlayerActionEmbed("💥 **Cleared...** ⏹", *interaction.Member),
+	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
+func (m *musicPlayerCog) resume(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.isEmptyQueue() || !guildPlayer.isPaused() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("There is no track currently paused to resume.")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	guildPlayer.resume()
+
+	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Embeds: embeds.MusicPlayerActionEmbed("⏯️ **Resuming** 👍", *interaction.Member),
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}
@@ -660,6 +714,8 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 		err = m.skip(session, interaction)
 	case "pause":
 		err = m.pause(session, interaction)
+	case "resume":
+		err = m.resume(session, interaction)
 	case "rewind":
 		err = m.rewind(session, interaction)
 	case "clear":
@@ -671,8 +727,10 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 	if err != nil {
 		m.logger.Error("An error occurred during when executing command", zap.Error(err), zap.String("command", interaction.ApplicationCommandData().Name))
 
-		err := util.SendMessage(session, interaction.Interaction, false, util.MessageData{Embeds: embeds.UnexpectedErrorEmbed()},
-			util.WithDeletion(time.Second*30, interaction.ChannelID))
+		err := util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+			Embeds: embeds.UnexpectedErrorEmbed(),
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
+		}, util.WithDeletion(time.Second*30, interaction.ChannelID))
 		if err != nil {
 			m.logger.Error("Failed to send unexpected error message", zap.Error(err))
 		}
