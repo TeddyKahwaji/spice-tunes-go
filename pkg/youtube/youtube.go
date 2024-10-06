@@ -21,9 +21,10 @@ const (
 )
 
 type SearchWrapper struct {
-	ytPlaylistService *youtube.PlaylistItemsService
-	ytVideoService    *youtube.VideosService
-	ytSearchService   *youtube.SearchService
+	ytPlaylistItemsService *youtube.PlaylistItemsService
+	ytVideoService         *youtube.VideosService
+	ytSearchService        *youtube.SearchService
+	ytPlaylistService      *youtube.PlaylistsService
 }
 
 func NewYoutubeSearchWrapper(ctx context.Context, creds []byte) (*SearchWrapper, error) {
@@ -32,14 +33,11 @@ func NewYoutubeSearchWrapper(ctx context.Context, creds []byte) (*SearchWrapper,
 		return nil, fmt.Errorf("instantiating new service: %w", err)
 	}
 
-	ytPlaylistService := youtube.NewPlaylistItemsService(service)
-	ytVideoService := youtube.NewVideosService(service)
-	ytSearchService := youtube.NewSearchService(service)
-
 	return &SearchWrapper{
-		ytPlaylistService: ytPlaylistService,
-		ytVideoService:    ytVideoService,
-		ytSearchService:   ytSearchService,
+		ytPlaylistItemsService: youtube.NewPlaylistItemsService(service),
+		ytVideoService:         youtube.NewVideosService(service),
+		ytSearchService:        youtube.NewSearchService(service),
+		ytPlaylistService:      youtube.NewPlaylistsService(service),
 	}, nil
 }
 
@@ -76,19 +74,23 @@ func (yt *SearchWrapper) GetTracksData(ctx context.Context, audioType audiotype.
 	requesterName := ctx.Value("requesterName").(string)
 
 	if audioType == audiotype.GenericSearch {
-		trackData, err = yt.handleGenericSearch(requesterName, query)
-	} else {
-		youtubeID, err := extractYoutubeID(audioType, query)
-		if err != nil {
-			return nil, fmt.Errorf("extracting youtube ID: %w", err)
+		if trackData, err = yt.handleGenericSearch(requesterName, query); err != nil {
+			return nil, fmt.Errorf("getting generic search data: %w", err)
 		}
 
-		switch audioType {
-		case audiotype.YoutubePlaylist:
-			trackData, err = yt.handlePlaylist(requesterName, youtubeID)
-		case audiotype.YoutubeSong:
-			trackData, err = yt.handleSingleTrack(requesterName, youtubeID)
-		}
+		return trackData, nil
+	}
+
+	youtubeID, err := extractYoutubeID(audioType, query)
+	if err != nil {
+		return nil, fmt.Errorf("extracting youtube ID: %w", err)
+	}
+
+	switch audioType {
+	case audiotype.YoutubePlaylist:
+		trackData, err = yt.handlePlaylist(requesterName, youtubeID)
+	case audiotype.YoutubeSong:
+		trackData, err = yt.handleSingleTrack(requesterName, youtubeID)
 	}
 
 	if err != nil {
@@ -166,12 +168,40 @@ func (yt *SearchWrapper) handleGenericSearch(requesterName string, query string)
 	return yt.handleSingleTrack(requesterName, item.Id.VideoId)
 }
 
+func (yt *SearchWrapper) getPlaylistMetaData(ID string) (*audiotype.PlaylistData, error) {
+	req := yt.ytPlaylistService.List([]string{"snippet", "contentDetails"}).Id(ID)
+
+	resp, err := req.Do()
+	if err != nil {
+		return nil, fmt.Errorf("getting playlist meta data: %w", err)
+	}
+
+	if len(resp.Items) == 0 {
+		return nil, errors.New("unable to get playlist metadata")
+	}
+
+	result := &audiotype.PlaylistData{
+		PlaylistName: resp.Items[0].Snippet.Title,
+	}
+
+	if thumbnail := resp.Items[0].Snippet.Thumbnails; thumbnail != nil {
+		result.PlaylistImageURL = thumbnail.High.Url
+	}
+
+	return result, nil
+}
+
 func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audiotype.Data, error) {
-	req := yt.ytPlaylistService.List([]string{"snippet", "contentDetails"}).
+	req := yt.ytPlaylistItemsService.List([]string{"snippet", "contentDetails"}).
 		PlaylistId(ID).
 		MaxResults(100)
 
 	trackData := []audiotype.TrackData{}
+
+	playlistMetaData, err := yt.getPlaylistMetaData(ID)
+	if err != nil {
+		return nil, err
+	}
 
 	var mu sync.Mutex
 	eg, _ := errgroup.WithContext(context.Background())
@@ -248,8 +278,9 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 	}
 
 	return &audiotype.Data{
-		Tracks: trackData,
-		Type:   audiotype.YoutubePlaylist,
+		Tracks:       trackData,
+		Type:         audiotype.YoutubePlaylist,
+		PlaylistData: playlistMetaData,
 	}, nil
 }
 

@@ -297,8 +297,14 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			m.logger.Warn("unable to refresh view state", zap.Error(err), zap.String("guild_id", interaction.GuildID))
 		}
 
+		addedTrackEmbed, err := embeds.AddedTracksEmbed(trackData, interaction.Member, startingPtr+1)
+		if err != nil {
+			m.logger.Warn("was not able to provide user with added tracks message embed", zap.Error(err), zap.String("guild_id", interaction.GuildID))
+			return nil
+		}
+
 		if err := util.SendMessage(session, interaction.Interaction, true, util.MessageData{
-			Embeds: embeds.AddedTracksEmbed(trackData, interaction.Member, startingPtr+1),
+			Embeds: addedTrackEmbed,
 		}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 			return fmt.Errorf("sending message: %w", err)
 		}

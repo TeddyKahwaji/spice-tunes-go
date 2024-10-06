@@ -65,6 +65,23 @@ func (s *SpotifyClientWrapper) GetTracksData(ctx context.Context, audioType audi
 	return result, err
 }
 
+func (s *SpotifyClientWrapper) getPlaylistMetaData(spotifyTrackID string) (*audiotype.PlaylistData, error) {
+	data, err := s.client.GetPlaylistOpt(spotify.ID(spotifyTrackID), "name,images")
+	if err != nil {
+		return nil, fmt.Errorf("getting playlist metadata: %w", err)
+	}
+
+	result := &audiotype.PlaylistData{
+		PlaylistName: data.Name,
+	}
+
+	if len(data.Images) > 0 {
+		result.PlaylistImageURL = data.Images[0].URL
+	}
+
+	return result, nil
+}
+
 func (s *SpotifyClientWrapper) handleSingleTrackData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
 	trackData := make([]audiotype.TrackData, 0, 1)
 
@@ -98,6 +115,14 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 	result, err := s.client.GetAlbum(spotify.ID(spotifyTrackID))
 	if err != nil {
 		return nil, fmt.Errorf("getting album track items: %w", err)
+	}
+
+	playlistData := &audiotype.PlaylistData{
+		PlaylistName: result.Name,
+	}
+
+	if len(result.Images) > 0 {
+		playlistData.PlaylistImageURL = result.Images[0].URL
 	}
 
 	orderedData := make(map[int][]audiotype.TrackData)
@@ -144,8 +169,9 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 	}
 
 	return &audiotype.Data{
-		Tracks: trackData,
-		Type:   audiotype.SpotifyAlbum,
+		Tracks:       trackData,
+		Type:         audiotype.SpotifyAlbum,
+		PlaylistData: playlistData,
 	}, nil
 }
 
@@ -157,8 +183,12 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 		limit  = 50
 	)
 
-	trackData := []audiotype.TrackData{}
+	playlistData, err := s.getPlaylistMetaData(spotifyTrackID)
+	if err != nil {
+		return nil, err
+	}
 
+	trackData := []audiotype.TrackData{}
 	result, err := s.client.GetPlaylistTracksOpt(spotify.ID(spotifyTrackID), &spotify.Options{
 		Offset: &offset,
 		Limit:  &limit,
@@ -212,8 +242,9 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 	}
 
 	return &audiotype.Data{
-		Tracks: trackData,
-		Type:   audiotype.SpotifyPlaylist,
+		Tracks:       trackData,
+		Type:         audiotype.SpotifyPlaylist,
+		PlaylistData: playlistData,
 	}, nil
 }
 

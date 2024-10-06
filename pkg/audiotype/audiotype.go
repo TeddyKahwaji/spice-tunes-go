@@ -17,10 +17,15 @@ type TrackData struct {
 	Requester     string
 	Duration      time.Duration
 }
+type PlaylistData struct {
+	PlaylistName     string
+	PlaylistImageURL string
+}
 
 type Data struct {
-	Tracks []TrackData
-	Type   SupportedAudioType
+	Tracks       []TrackData
+	Type         SupportedAudioType
+	PlaylistData *PlaylistData
 }
 
 const (

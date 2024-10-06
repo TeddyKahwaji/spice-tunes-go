@@ -1,6 +1,7 @@
 package embeds
 
 import (
+	"errors"
 	"fmt"
 
 	"tunes/pkg/audiotype"
@@ -50,17 +51,41 @@ func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 	}
 }
 
-func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, position int) *discordgo.MessageEmbed {
+// This function will return the added songs message embed to the user
+// if the added data was a playlist & the playlist metadata field is nil it will
+// return an error
+func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, position int) (*discordgo.MessageEmbed, error) {
 	baseMessageEmbed := discordgo.MessageEmbed{
 		Color: 0xd5a7b4,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    "Added by " + member.User.Username,
 			IconURL: member.AvatarURL(""),
 		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "**Position in queue**",
+				Value:  fmt.Sprintf("`%d`", position),
+				Inline: true,
+			},
+		},
 	}
 
 	if len(trackData.Tracks) > 1 {
-		// TODO: Handle multi track type
+		if trackData.PlaylistData == nil {
+			return nil, errors.New("error no playlist data")
+		}
+
+		baseMessageEmbed.Description = fmt.Sprintf("**%s** added to queue", trackData.PlaylistData.PlaylistName)
+
+		baseMessageEmbed.Thumbnail = &discordgo.MessageEmbedThumbnail{
+			URL: trackData.PlaylistData.PlaylistImageURL,
+		}
+
+		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
+			Name:   "**Enqueued**",
+			Value:  fmt.Sprintf("`%d` songs", len(trackData.Tracks)),
+			Inline: true,
+		})
 	} else {
 		addedTrack := trackData.Tracks[0]
 
@@ -69,11 +94,6 @@ func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, posit
 		}
 
 		baseMessageEmbed.Description = fmt.Sprintf("**%s** added to queue", addedTrack.TrackName)
-		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
-			Name:   "**Position in queue**",
-			Value:  fmt.Sprintf("`%d`", position),
-			Inline: true,
-		})
 
 		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
 			Name:   "**Duration**",
@@ -82,7 +102,7 @@ func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, posit
 		})
 	}
 
-	return &baseMessageEmbed
+	return &baseMessageEmbed, nil
 }
 
 func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.MessageEmbed {
