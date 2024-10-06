@@ -22,6 +22,8 @@ const (
 	NotPlaying VoiceState = "NOT_PLAYING"
 )
 
+var ErrStreamNonExistent = errors.New("no stream exists")
+
 type guildPlayer struct {
 	guildID     string
 	channelID   string
@@ -75,6 +77,7 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 		SkipDisabled:  !g.HasNext(),
 		BackDisabled:  !g.HasPrevious(),
 		ClearDisabled: !g.HasNext(),
+		Resume:        g.IsPaused(),
 	}
 
 	musicPlayerButtons := embeds.GetMusicPlayerButtons(buttonsConfig)
@@ -103,6 +106,17 @@ func (g *guildPlayer) GenerateMusicPlayerView(interaction *discordgo.Interaction
 		case "SkipBtn":
 			g.Skip()
 			g.SendStopSignal()
+		case "PauseResumeBtn":
+			if !g.IsPaused() {
+				if err := g.Pause(); err != nil {
+					return fmt.Errorf("pausing: %w", err)
+				}
+			} else {
+				if err := g.Resume(); err != nil {
+					return fmt.Errorf("resuming: %w", err)
+				}
+			}
+
 		case "BackBtn":
 			g.Rewind()
 			g.SendStopSignal()
@@ -147,8 +161,24 @@ func (g *guildPlayer) GetCurrentSong() string {
 func (g *guildPlayer) ResetQueue() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.queue = g.queue[:1]
+	g.queue = g.queue[:0]
 	g.queuePtr.Store(0)
+}
+
+func (g *guildPlayer) SetVoiceState(voiceState VoiceState) {
+	g.voiceState = voiceState
+}
+
+func (g *guildPlayer) IsPlaying() bool {
+	return g.voiceState == Playing
+}
+
+func (g *guildPlayer) IsPaused() bool {
+	return g.voiceState == Paused
+}
+
+func (g *guildPlayer) IsNotActive() bool {
+	return g.voiceState == NotPlaying
 }
 
 func (g *guildPlayer) AddTracks(data ...audiotype.TrackData) {
@@ -163,6 +193,28 @@ func (g *guildPlayer) HasNext() bool {
 
 func (g *guildPlayer) IsEmptyQueue() bool {
 	return len(g.queue) == 0
+}
+
+func (g *guildPlayer) Pause() error {
+	if g.stream == nil {
+		return ErrStreamNonExistent
+	}
+
+	g.stream.SetPaused(true)
+	g.voiceState = Paused
+
+	return nil
+}
+
+func (g *guildPlayer) Resume() error {
+	if g.stream == nil {
+		return ErrStreamNonExistent
+	}
+
+	g.stream.SetPaused(false)
+	g.voiceState = Playing
+
+	return nil
 }
 
 func (g *guildPlayer) HasPrevious() bool {

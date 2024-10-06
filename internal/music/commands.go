@@ -19,4 +19,8 @@ var musicPlayerCommands = []*discordgo.ApplicationCommand{
 		Name:        "skip",
 		Description: "Skips the current track playing",
 	},
+	{
+		Name:        "pause",
+		Description: "Pauses the current track playing",
+	},
 }

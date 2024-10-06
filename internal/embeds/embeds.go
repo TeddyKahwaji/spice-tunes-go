@@ -31,7 +31,7 @@ func NotFoundEmbed() *discordgo.MessageEmbed {
 }
 
 func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
-	embed := &discordgo.MessageEmbed{
+	return &discordgo.MessageEmbed{
 		Title:       "Now Playing 🎵",
 		Description: trackData.TrackName,
 		Color:       0xd5a7b4,
@@ -48,8 +48,17 @@ func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 			},
 		},
 	}
+}
 
-	return embed
+func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Description: content,
+		Color:       0xd5a7b4,
+		Footer: &discordgo.MessageEmbedFooter{
+			IconURL: member.AvatarURL(""),
+			Text:    "Action initiated by " + member.User.Username,
+		},
+	}
 }
 
 func UnexpectedErrorEmbed() *discordgo.MessageEmbed {

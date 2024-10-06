@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -83,6 +82,12 @@ func (m *musicPlayerCog) RegisterCommands(session *discordgo.Session) error {
 func (m *musicPlayerCog) globalPlay() {
 	for gp := range m.songSignal {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					m.logger.Warn("recovery occurred when executing play audio")
+				}
+			}()
+
 			if err := m.playAudio(gp); err != nil {
 				m.logger.Warn("error playing audio", zap.String("guild_id", gp.guildID), zap.Error(err))
 			}
@@ -91,44 +96,24 @@ func (m *musicPlayerCog) globalPlay() {
 }
 
 func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
-	var (
-		options         goutubedl.Options
-		downloadOptions goutubedl.DownloadOptions
-	)
-
 	userName := "oauth"
 	password := ""
 
+	options := goutubedl.Options{
+		Type:       goutubedl.TypeSingle,
+		HTTPClient: m.httpClient,
+		DebugLog:   zap.NewStdLog(m.logger),
+		Username:   &userName,
+		Password:   &password,
+	}
+
+	downloadOptions := goutubedl.DownloadOptions{
+		DownloadAudioOnly: true,
+	}
+
 	if strings.Contains(audioTrackName, "ytsearch") {
-		options = goutubedl.Options{
-			Type:       goutubedl.TypePlaylist,
-			HTTPClient: m.httpClient,
-			DebugLog:   zap.NewStdLog(m.logger),
-			Username:   &userName,
-			Password:   &password,
-			StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
-		}
-
-		downloadOptions = goutubedl.DownloadOptions{
-			Filter:            "best",
-			DownloadAudioOnly: true,
-			PlaylistIndex:     1,
-		}
-
-	} else {
-		options = goutubedl.Options{
-			Type:       goutubedl.TypeSingle,
-			HTTPClient: m.httpClient,
-			DebugLog:   zap.NewStdLog(m.logger),
-			Username:   &userName,
-			Password:   &password,
-			StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
-		}
-
-		downloadOptions = goutubedl.DownloadOptions{
-			Filter:            "best",
-			DownloadAudioOnly: true,
-		}
+		options.Type = goutubedl.TypePlaylist
+		downloadOptions.PlaylistIndex = 1
 	}
 
 	result, err := goutubedl.New(ctx, audioTrackName, options)
@@ -193,7 +178,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 
 	guildPlayer.doneChannel = make(chan error)
 	guildPlayer.stream = dca.NewStream(encodingStream, guildPlayer.voiceClient, guildPlayer.doneChannel)
-	guildPlayer.voiceState = Playing
+	guildPlayer.SetVoiceState(Playing)
 
 	for {
 		select {
@@ -204,7 +189,7 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 						guildPlayer.Skip()
 						m.songSignal <- guildPlayer
 					} else {
-						guildPlayer.voiceState = NotPlaying
+						guildPlayer.SetVoiceState(NotPlaying)
 						guildPlayer.ResetQueue()
 					}
 				} else {
@@ -224,26 +209,18 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 }
 
 func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
 	voiceState, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 	if err != nil {
-		if errors.Is(err, discordgo.ErrStateNotFound) {
-			invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("**%s, you must be in a voice channel.**", interaction.Member.User.Username))
-			msgData := util.MessageData{
-				Embeds: invalidUsageEmbed,
-				FlagWrapper: &util.FlagWrapper{
-					Flags: discordgo.MessageFlagsEphemeral,
-				},
-			}
-
-			err := util.SendMessage(session, interaction.Interaction, false, msgData)
-			if err != nil {
-				return fmt.Errorf("interaction response: %w", err)
-			}
-
-			return nil
-		}
-
-		return fmt.Errorf("retrieving voice state: %w", err)
+		return fmt.Errorf("getting voice state: %w", err)
 	}
 
 	if _, ok := m.guildVoiceStates[interaction.GuildID]; !ok {
@@ -263,6 +240,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 
 	options := interaction.ApplicationCommandData().Options
 	query := options[0].Value.(string)
+
 	audioType, err := audiotype.DetermineAudioType(query)
 	if err != nil {
 		return fmt.Errorf("determining audio type: %w", err)
@@ -298,18 +276,19 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 
 	guildPlayer.AddTracks(trackData.Tracks...)
 
-	if err := guildPlayer.GenerateMusicPlayerView(interaction.Interaction, session); err != nil {
-		return fmt.Errorf("generating music player view: %w", err)
+	if guildPlayer.IsNotActive() {
+		m.songSignal <- guildPlayer
 	}
 
-	if guildPlayer.voiceState == NotPlaying {
-		m.songSignal <- guildPlayer
+	if err := guildPlayer.GenerateMusicPlayerView(interaction.Interaction, session); err != nil {
+		return fmt.Errorf("generating music player view: %w", err)
 	}
 
 	return nil
 }
 
-func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+// Helper function to throw error for commands requiring user to be in voice channel
+func (m *musicPlayerCog) verifyInChannelAndSendError(session *discordgo.Session, interaction *discordgo.InteractionCreate) (bool, error) {
 	_, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 	if err != nil {
 		if errors.Is(err, discordgo.ErrStateNotFound) {
@@ -323,15 +302,59 @@ func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo
 
 			err := util.SendMessage(session, interaction.Interaction, false, msgData)
 			if err != nil {
-				return fmt.Errorf("interaction response: %w", err)
+				return false, fmt.Errorf("interaction response: %w", err)
 			}
 
-			return nil
+			return false, nil
 		}
+
+		return false, fmt.Errorf("retrieving voice state: %w", err)
 	}
 
-	guildPlayer := m.guildVoiceStates[interaction.GuildID]
+	return true, nil
+}
+
+func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.IsEmptyQueue() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	if guildPlayer.HasNext() {
+		guildPlayer.Skip()
+	} else {
+		guildPlayer.ResetQueue()
+	}
+
 	guildPlayer.SendStopSignal()
+
+	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Embeds: embeds.MusicPlayerActionEmbed("⏩ ***Track Skipped*** 👍", *interaction.Member),
+	}); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
 
 	return nil
 }
@@ -378,6 +401,48 @@ func (m *musicPlayerCog) retrieveTracks(ctx context.Context, audioType audiotype
 	return trackData, nil
 }
 
+func (m *musicPlayerCog) pause(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+
+	if !ok || guildPlayer.IsEmptyQueue() || guildPlayer.IsPaused() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := guildPlayer.Pause(); err != nil {
+		return fmt.Errorf("pausing: %w", err)
+	}
+
+	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Embeds: embeds.MusicPlayerActionEmbed("**Paused** ⏸️", *interaction.Member),
+	}); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
 func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 	if interaction.Type != discordgo.InteractionApplicationCommand {
 		return
@@ -390,6 +455,8 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 		err = m.play(session, interaction)
 	case "skip":
 		err = m.skip(session, interaction)
+	case "pause":
+		err = m.pause(session, interaction)
 	}
 
 	if err != nil {

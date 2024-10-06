@@ -308,7 +308,6 @@ func infoFromURL(
 	cmd := exec.CommandContext(
 		ctx,
 		ProbePath(),
-		"--verbose",
 		// TODO: deprecated in yt-dlp?
 		"--no-call-home",
 		// use safer output filenmaes
@@ -592,7 +591,6 @@ func (result Result) DownloadWithOptions(
 	cmd := exec.CommandContext(
 		ctx,
 		ProbePath(),
-		"--verbose",
 		// see comment below about ignoring errors for playlists
 		"--ignore-errors",
 		// TODO: deprecated in yt-dlp?

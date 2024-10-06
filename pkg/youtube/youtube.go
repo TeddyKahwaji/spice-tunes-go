@@ -256,6 +256,7 @@ func (yt *YoutubeSearchWrapper) handlePlaylist(requesterName string, ID string) 
 
 func parseISO8601Duration(isoDuration string) (time.Duration, error) {
 	re := regexp.MustCompile(`PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?`)
+
 	matches := re.FindStringSubmatch(isoDuration)
 	if len(matches) == 0 {
 		return 0, errors.New("invalid ISO 8601 duration format")
@@ -266,9 +267,11 @@ func parseISO8601Duration(isoDuration string) (time.Duration, error) {
 	if matches[1] != "" {
 		hours, _ = strconv.Atoi(matches[1])
 	}
+
 	if matches[2] != "" {
 		minutes, _ = strconv.Atoi(matches[2])
 	}
+
 	if matches[3] != "" {
 		seconds, _ = strconv.Atoi(matches[3])
 	}

@@ -5,12 +5,27 @@ import "github.com/bwmarrin/discordgo"
 type MusicPlayButtonsConfig struct {
 	ForwardDisabled bool
 	BackDisabled    bool
-	PauseDisabled   bool
 	SkipDisabled    bool
 	ClearDisabled   bool
+	Resume          bool
 }
 
 func GetMusicPlayerButtons(config MusicPlayButtonsConfig) []discordgo.MessageComponent {
+	pauseResumeBtn := discordgo.Button{
+		Disabled: false,
+		CustomID: "PauseResumeBtn",
+		Label:    "Pause",
+		Style:    discordgo.SecondaryButton,
+		Emoji: &discordgo.ComponentEmoji{
+			Name: "⏸", // Pause emoji
+		},
+	}
+
+	if config.Resume {
+		pauseResumeBtn.Label = "Resume"
+		pauseResumeBtn.Emoji.Name = "▶️"
+	}
+
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
@@ -23,15 +38,7 @@ func GetMusicPlayerButtons(config MusicPlayButtonsConfig) []discordgo.MessageCom
 						Name: "⏮", // Rewind emoji
 					},
 				},
-				discordgo.Button{
-					Disabled: config.PauseDisabled,
-					CustomID: "PauseBtn",
-					Label:    "Pause",
-					Style:    discordgo.SecondaryButton,
-					Emoji: &discordgo.ComponentEmoji{
-						Name: "⏸", // Pause emoji
-					},
-				},
+				pauseResumeBtn,
 				discordgo.Button{
 					Disabled: config.SkipDisabled,
 					CustomID: "SkipBtn",
