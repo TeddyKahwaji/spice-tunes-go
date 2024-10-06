@@ -57,6 +57,14 @@ func GetMusicPlayerButtons(config MusicPlayButtonsConfig) []discordgo.MessageCom
 						Name: "🗑️", // Wastebasket emoji
 					},
 				},
+				discordgo.Button{
+					CustomID: "LikeBtn",
+					Label:    "Like",
+					Style:    discordgo.PrimaryButton,
+					Emoji: &discordgo.ComponentEmoji{
+						Name: "❤️", // Wastebasket emoji
+					},
+				},
 			},
 		},
 	}

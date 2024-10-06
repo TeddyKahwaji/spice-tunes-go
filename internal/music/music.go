@@ -17,9 +17,10 @@ import (
 	"tunes/pkg/util"
 	"tunes/pkg/youtube"
 
+	"tunes/internal/goutubedl"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
-	"github.com/wader/goutubedl"
 	"go.uber.org/zap"
 )
 
@@ -33,6 +34,17 @@ type musicPlayerCog struct {
 	ytSearchWrapper  *youtube.SearchWrapper
 }
 
+type Firebase interface {
+	CreateDocument(ctx context.Context, collection string, document string, data interface{}) error
+	DeleteDocument(ctx context.Context, collection string, document string) error
+	CloneFileFromStorage(ctx context.Context, bucketName string, sourceObject string, destinationObject string) error
+	DeleteFileFromStorage(ctx context.Context, bucketName string, objectName string) error
+	DownloadFileBytes(ctx context.Context, bucketName string, objectName string) (io.Reader, error)
+	GetDocumentFromCollection(ctx context.Context, collection string, document string) (map[string]interface{}, error)
+	GenerateSignedURL(bucketName string, objectName string) (string, error)
+	UpdateDocument(ctx context.Context, collection string, document string, data map[string]interface{}) error
+	UploadFileToStorage(ctx context.Context, bucketName string, objectName string, file *os.File, fileName string) error
+}
 type TrackDataRetriever interface {
 	GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
 }
