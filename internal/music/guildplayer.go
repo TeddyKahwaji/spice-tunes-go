@@ -3,6 +3,7 @@ package music
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 
@@ -82,8 +83,8 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	}
 
 	buttonsConfig := embeds.MusicPlayButtonsConfig{
-		SkipDisabled:  !g.hasNext(),
-		BackDisabled:  !g.hasPrevious(),
+		SkipDisabled:  !g.hasNext() || g.isPaused(),
+		BackDisabled:  !g.hasPrevious() || g.isPaused(),
 		ClearDisabled: !g.hasNext(),
 		Resume:        g.isPaused(),
 	}
@@ -246,6 +247,16 @@ func (g *guildPlayer) isEmptyQueue() bool {
 	return len(g.queue) == 0
 }
 
+func (g *guildPlayer) shuffleQueue() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for i := g.getCurrentPointer() + 1; i < len(g.queue); i++ {
+		j := rand.Intn(i-g.getCurrentPointer()) + g.getCurrentPointer() + 1
+		g.queue[i], g.queue[j] = g.queue[j], g.queue[i]
+	}
+}
+
 func (g *guildPlayer) pause() error {
 	if g.stream == nil {
 		return errStreamNonExistent
@@ -257,8 +268,10 @@ func (g *guildPlayer) pause() error {
 	return nil
 }
 
-func (g *guildPlayer) getQueueLength() int {
-	return len(g.queue) - g.getCurrentPointer()
+// Returns the amount of tracks left in the queue based on the
+// current queue ptr
+func (g *guildPlayer) remainingQueueLength() int {
+	return len(g.queue) - (g.getCurrentPointer() + 1)
 }
 
 func (g *guildPlayer) resume() error {

@@ -85,6 +85,7 @@ func main() {
 
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+
 	creds, err := gcp.GetCredentials()
 	if err != nil {
 		logger.Fatal("unable to retrieve gcp credentials", zap.Error(err))

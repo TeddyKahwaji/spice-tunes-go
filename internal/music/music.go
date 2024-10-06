@@ -316,7 +316,7 @@ func (m *musicPlayerCog) verifyInChannelAndSendError(session *discordgo.Session,
 	_, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 	if err != nil {
 		if errors.Is(err, discordgo.ErrStateNotFound) {
-			invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("**%s, you must be in a voice channel.**", interaction.Member.User.Username))
+			invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("%s, you must be in a voice channel.", interaction.Member.User.Username))
 			msgData := util.MessageData{
 				Embeds: invalidUsageEmbed,
 				FlagWrapper: &util.FlagWrapper{
@@ -552,6 +552,49 @@ func (m *musicPlayerCog) rewind(session *discordgo.Session, interaction *discord
 	return nil
 }
 
+func (m *musicPlayerCog) shuffle(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.isEmptyQueue() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("You can't shuffle an empty queue")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	guildPlayer.shuffleQueue()
+
+	if err := guildPlayer.refreshState(session); err != nil {
+		m.logger.Warn("unable to refresh view state", zap.Error(err), zap.String("guild_id", interaction.GuildID))
+	}
+
+	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Embeds: embeds.MusicPlayerActionEmbed("**Shuffled queue** 👌", *interaction.Member),
+	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
 func (m *musicPlayerCog) clear(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
@@ -613,6 +656,8 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 		err = m.rewind(session, interaction)
 	case "clear":
 		err = m.clear(session, interaction)
+	case "shuffle":
+		err = m.shuffle(session, interaction)
 	}
 
 	if err != nil {

@@ -31,4 +31,8 @@ var musicPlayerCommands = []*discordgo.ApplicationCommand{
 		Name:        "clear",
 		Description: "Clears the entire music queue",
 	},
+	{
+		Name:        "shuffle",
+		Description: "Shuffles the music queue",
+	},
 }

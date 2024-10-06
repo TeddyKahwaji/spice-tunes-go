@@ -135,7 +135,7 @@ func (yt *SearchWrapper) handleSingleTrack(requesterName string, ID string) (*au
 		TrackName:     item.Snippet.Title,
 		Query:         YoutubeVideoBase + ID,
 		Requester:     requesterName,
-		Duration:      time.Duration(duration),
+		Duration:      duration,
 	})
 
 	return &audiotype.Data{

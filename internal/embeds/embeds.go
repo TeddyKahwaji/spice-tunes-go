@@ -70,13 +70,15 @@ func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, posit
 
 		baseMessageEmbed.Description = fmt.Sprintf("**%s** added to queue", addedTrack.TrackName)
 		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
-			Name:  "**Position in queue**",
-			Value: fmt.Sprintf("`%d`", position),
+			Name:   "**Position in queue**",
+			Value:  fmt.Sprintf("`%d`", position),
+			Inline: true,
 		})
 
 		baseMessageEmbed.Fields = append(baseMessageEmbed.Fields, &discordgo.MessageEmbedField{
-			Name:  "**Duration**",
-			Value: fmt.Sprintf("`%s`", audiotype.FormatDuration(addedTrack.Duration)),
+			Name:   "**Duration**",
+			Value:  fmt.Sprintf("`%s`", audiotype.FormatDuration(addedTrack.Duration)),
+			Inline: true,
 		})
 	}
 
