@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -107,6 +108,7 @@ func (m *musicPlayerCog) downloadTrack(ctx context.Context, audioTrackName strin
 		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 		DebugLog:   zap.NewStdLog(m.logger),
+		StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
 		Username:   &userName,
 		Password:   &password,
 	}

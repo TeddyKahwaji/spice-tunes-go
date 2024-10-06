@@ -130,7 +130,7 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 			g.rewind()
 			g.sendStopSignal()
 		case "ClearBtn":
-			g.resetQueue()
+			g.clearUpcomingTracks()
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
@@ -208,6 +208,15 @@ func (g *guildPlayer) getCurrentSong() string {
 
 func (g *guildPlayer) getCurrentPointer() int {
 	return int(g.queuePtr.Load())
+}
+
+// unlike resetQueue, this resets the queue to
+// only contain elements up to the queue ptr
+func (g *guildPlayer) clearUpcomingTracks() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.queue = g.queue[g.getCurrentPointer():1]
+	g.queuePtr.Store(0)
 }
 
 func (g *guildPlayer) resetQueue() {
