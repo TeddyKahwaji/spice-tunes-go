@@ -9,7 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -33,12 +35,23 @@ const (
 const (
 	guildCollection    string = "guilds"
 	userDataCollection string = "user-data"
+	likedTracksPath    string = "liked_tracks"
 )
 
 var (
 	errStreamNonExistent = errors.New("no stream exists")
 	errNoMusicPlayerView = errors.New("guild player does not have a music player view")
+	errEmptyQueue        = errors.New("queue is empty")
 )
+
+type likedTrack struct {
+	SpotifyTrackID string `firestore:"spotifyTrackId"`
+}
+
+type userData struct {
+	LikedTracks    []likedTrack          `firestore:"liked_tracks"`
+	SavedPlaylists []audiotype.TrackData `firestore:"playlists"`
+}
 
 type TrackSearcher interface {
 	SearchTrack(string) (string, error)
@@ -122,17 +135,47 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 // This is a best case effort, if the song doesn't exist we don't like but don't propagate an error to the user
 // this will only return errors in non-404 case.
 func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error {
-	_, err := g.fireStoreClient.GetDocumentFromCollection(ctx, guildCollection, g.guildID).
+	if g.isEmptyQueue() {
+		return errEmptyQueue
+	}
+
+	currentSong := g.getCurrentSong()
+
+	spotifyTrackID, err := g.trackSearcher.SearchTrack(currentSong.TrackName)
+	if err != nil {
+		return fmt.Errorf("searching for track: %w", err)
+	}
+
+	trackToAdd := likedTrack{
+		SpotifyTrackID: spotifyTrackID,
+	}
+
+	docRef, err := g.fireStoreClient.GetDocumentFromCollection(ctx, guildCollection, g.guildID).
 		Collection(userDataCollection).
 		Doc(userID).
 		Get(ctx)
-
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			// handle
+			if _, err := docRef.Ref.Set(ctx, userData{
+				LikedTracks:    []likedTrack{trackToAdd},
+				SavedPlaylists: []audiotype.TrackData{},
+			}); err != nil {
+				return fmt.Errorf("setting user data: %w", err)
+			}
+
+			return nil
 		}
 
 		return fmt.Errorf("getting document from collection: %w", err)
+	}
+
+	if _, err := docRef.Ref.Update(ctx, []firestore.Update{
+		{
+			Path:  likedTracksPath,
+			Value: firestore.ArrayUnion(trackToAdd),
+		},
+	}); err != nil {
+		return fmt.Errorf("updating document: %w", err)
 	}
 
 	return nil
@@ -148,6 +191,8 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 
 	handler := func(passedInteraction *discordgo.Interaction) error {
 		var actionMessage string
+		eg, ctx := errgroup.WithContext(context.Background())
+
 		messageID := passedInteraction.Message.ID
 		messageCustomID := passedInteraction.MessageComponentData().CustomID
 
@@ -179,7 +224,9 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 			g.clearUpcomingTracks()
 			actionMessage = "💥 **Cleared...** ⏹"
 		case "LikeBtn":
-			g.likeCurrentSong(context.Background(), passedInteraction.Member.User.ID)
+			eg.Go(func() error {
+				return g.likeCurrentSong(ctx, passedInteraction.Member.User.ID)
+			})
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
@@ -199,13 +246,30 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 			return fmt.Errorf("sending update message: %w", err)
 		}
 
-		message, err := session.ChannelMessageSendEmbed(passedInteraction.ChannelID, embeds.MusicPlayerActionEmbed(actionMessage, *interaction.Member))
-		if err != nil {
-			return fmt.Errorf("sending action initiated message: %w", err)
+		if actionMessage == "" {
+			currentSong := g.getCurrentSong()
+			if err := util.SendMessage(session, passedInteraction, true, util.MessageData{
+				Embeds: embeds.LikedSongEmbed(&currentSong),
+				FlagWrapper: &util.FlagWrapper{
+					Flags: discordgo.MessageFlagsEphemeral,
+				},
+			}); err != nil {
+				return fmt.Errorf("sending liked song message: %w", err)
+			}
+		} else {
+			message, err := session.ChannelMessageSendEmbed(passedInteraction.ChannelID, embeds.MusicPlayerActionEmbed(actionMessage, *interaction.Member))
+			if err != nil {
+				return fmt.Errorf("sending action initiated message: %w", err)
+			}
+
+			if err := util.DeleteMessageAfterTime(session, passedInteraction.ChannelID, message.ID, 30*time.Second); err != nil {
+				return fmt.Errorf("deleting message after time: %w", err)
+			}
+
 		}
 
-		if err := util.DeleteMessageAfterTime(session, passedInteraction.ChannelID, message.ID, 30*time.Second); err != nil {
-			return fmt.Errorf("deleting message after time: %w", err)
+		if err := eg.Wait(); err != nil {
+			return fmt.Errorf("liking song: %w", err)
 		}
 
 		return nil
@@ -256,11 +320,11 @@ func (g *guildPlayer) destroyView(session *discordgo.Session) error {
 	return nil
 }
 
-func (g *guildPlayer) getCurrentSong() string {
+func (g *guildPlayer) getCurrentSong() audiotype.TrackData {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	return g.queue[g.queuePtr.Load()].Query
+	return g.queue[g.queuePtr.Load()]
 }
 
 func (g *guildPlayer) getCurrentPointer() int {

@@ -12,6 +12,7 @@ import (
 const (
 	LightPink int = 0xd5a7b4
 	Brown     int = 0x992D22
+	Blurple   int = 0x5865F2
 	Purple    int = 0xd333ff
 )
 
@@ -33,6 +34,21 @@ func NotFoundEmbed() *discordgo.MessageEmbed {
 		Color:       LightPink,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: "https://media.giphy.com/media/piL4e4WusrA4S0KODK/giphy.gif",
+		},
+	}
+}
+
+func LikedSongEmbed(track *audiotype.TrackData) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title: "👍 Like Recorded",
+		Color: Blurple,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: track.TrackImageURL,
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Value: fmt.Sprintf("I've recorded that you liked `%s`", track.TrackName),
+			},
 		},
 	}
 }
@@ -114,7 +130,7 @@ func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, posit
 func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Description: content,
-		Color:       LightPink,
+		Color:       Blurple,
 		Footer: &discordgo.MessageEmbedFooter{
 			IconURL: member.AvatarURL(""),
 			Text:    "Action initiated by " + member.User.Username,

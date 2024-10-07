@@ -71,10 +71,6 @@ func newFirebaseClient(ctx context.Context, projectID string) (*firebase.Client,
 		return nil, fmt.Errorf("creating firestore client %w", err)
 	}
 
-	defer func() {
-		_ = fsClient.Close()
-	}()
-
 	return firebase.NewClient(fsClient), nil
 }
 

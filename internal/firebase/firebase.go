@@ -17,6 +17,10 @@ func NewClient(firestoreClient *fs.Client) *Client {
 	}
 }
 
+func (c *Client) Close() error {
+	return c.firestoreClient.Close()
+}
+
 func (c *Client) GetDocumentFromCollection(ctx context.Context, collection string, document string) *fs.DocumentRef {
 	return c.firestoreClient.Collection(collection).Doc(document)
 }

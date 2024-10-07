@@ -576,7 +576,7 @@ func (result Result) DownloadWithOptions(
 	var jsonTempPath string
 	if !result.Options.noInfoDownload {
 		jsonTempPath = path.Join(tempPath, "info.json")
-		if err := os.WriteFile(jsonTempPath, result.RawJSON, 0600); err != nil {
+		if err := os.WriteFile(jsonTempPath, result.RawJSON, 0o600); err != nil {
 			os.RemoveAll(tempPath)
 			return nil, err
 		}
@@ -634,9 +634,14 @@ func (result Result) DownloadWithOptions(
 		cmd.Args = append(cmd.Args, "-4")
 	}
 
-	cmd.Args = append(cmd.Args, "--username", "oauth2")
-	fmt.Print("here")
-	cmd.Args = append(cmd.Args, "--password", "")
+	if result.Options.Username != nil {
+		cmd.Args = append(cmd.Args, "--username", *result.Options.Username)
+	}
+
+	if result.Options.Password != nil {
+		cmd.Args = append(cmd.Args, "--password", *result.Options.Password)
+	}
+
 	// don't need to specify if direct as there is only one
 	// also seems to be issues when using filter with generic extractor
 	if !result.Info.Direct && options.Filter != "" {

@@ -11,11 +11,11 @@ import (
 type SupportedAudioType string
 
 type TrackData struct {
-	TrackName     string
-	TrackImageURL string
-	Query         string
-	Requester     string
-	Duration      time.Duration
+	TrackName     string        `firestore:"track_name"`
+	TrackImageURL string        `firestore:"track_image_url"`
+	Query         string        `firestore:"query"`
+	Requester     string        `firestore:"requester"`
+	Duration      time.Duration `firestore:"duration"`
 }
 type PlaylistData struct {
 	PlaylistName     string

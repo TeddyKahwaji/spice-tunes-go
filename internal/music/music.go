@@ -172,11 +172,11 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 		}
 	}
 
-	audioTrackName := guildPlayer.getCurrentSong()
+	audioTrackQuery := guildPlayer.getCurrentSong().Query
 
 	ctx := context.Background()
 
-	file, err := m.downloadTrack(ctx, audioTrackName)
+	file, err := m.downloadTrack(ctx, audioTrackQuery)
 	if err != nil {
 		return fmt.Errorf("downloading result: %w", err)
 	}
@@ -217,7 +217,10 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 					} else {
 						guildPlayer.setVoiceState(notPlaying)
 						guildPlayer.resetQueue()
-						guildPlayer.destroyView(m.session)
+
+						if err := guildPlayer.destroyView(m.session); err != nil {
+							m.logger.Warn("unable to destroy music player view", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
+						}
 					}
 				} else {
 					m.logger.Warn("error during audio stream", zap.Error(err))
@@ -702,7 +705,9 @@ func (m *musicPlayerCog) resume(session *discordgo.Session, interaction *discord
 		return nil
 	}
 
-	guildPlayer.resume()
+	if err := guildPlayer.resume(); err != nil {
+		return fmt.Errorf("resuming guild player: %w", err)
+	}
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
 		Embeds: embeds.MusicPlayerActionEmbed("⏯️ **Resuming** 👍", *interaction.Member),
