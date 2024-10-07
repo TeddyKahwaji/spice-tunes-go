@@ -9,10 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"tunes/internal/gcp"
-	"tunes/internal/music"
-	sw "tunes/pkg/spotify"
-	"tunes/pkg/youtube"
+	fb "firebase.google.com/go"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/firebase"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/gcp"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/music"
+	sw "github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
+	"google.golang.org/api/option"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/zmb3/spotify"
@@ -52,19 +55,43 @@ func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret 
 	return sw.NewSpotifyClientWrapper(&client)
 }
 
+func newFirebaseClient(ctx context.Context, projectID string) (*firebase.Client, error) {
+	creds, err := gcp.GetCredentials()
+	if err != nil {
+		return nil, fmt.Errorf("getting gcp credentials  %w", err)
+	}
+
+	app, err := fb.NewApp(ctx, &fb.Config{ProjectID: projectID}, option.WithCredentialsJSON(creds))
+	if err != nil {
+		return nil, fmt.Errorf("creating new firebase client %w", err)
+	}
+
+	fsClient, err := app.Firestore(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creating firestore client %w", err)
+	}
+
+	defer func() {
+		_ = fsClient.Close()
+	}()
+
+	return firebase.NewClient(fsClient), nil
+}
+
 func main() {
 	env := os.Getenv("ENV")
-	logger := getLogger(env)
+	discordToken := os.Getenv("SPICE_TUNES_DISCORD_TOKEN")
+	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
+	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 
+	logger := getLogger(env)
 	defer func() {
 		if err := logger.Sync(); err != nil {
 			logger.Warn("could not sync logger", zap.Error(err))
 		}
 	}()
 
-	discordToken := os.Getenv("SPICE_TUNES_DISCORD_TOKEN")
 	httpTimeout := time.Second * 5
-
 	httpClient := http.Client{
 		Timeout: httpTimeout,
 	}
@@ -83,9 +110,7 @@ func main() {
 		},
 	}
 
-	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
-	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
-
+	const gcpProjectID = "dj-bot-46e53"
 	creds, err := gcp.GetCredentials()
 	if err != nil {
 		logger.Fatal("unable to retrieve gcp credentials", zap.Error(err))
@@ -101,7 +126,13 @@ func main() {
 			logger.Fatal("unable to instantiate youtubeWrapperClient", zap.Error(err))
 		}
 
+		firebaseClient, err := newFirebaseClient(ctx, gcpProjectID)
+		if err != nil {
+			logger.Fatal("unable to instantiate firebase client", zap.Error(err))
+		}
+
 		musicCogConfig := &music.CogConfig{
+			FireStoreClient:      firebaseClient,
 			Session:              session,
 			HTTPClient:           &httpClient,
 			SpotifyWrapper:       spotifyWrapper,

@@ -307,6 +307,7 @@ func infoFromURL(
 	cmd := exec.CommandContext(
 		ctx,
 		ProbePath(),
+		"--verbose",
 		// see comment below about ignoring errors for playlists
 		"--ignore-errors",
 		// TODO: deprecated in yt-dlp?
@@ -314,8 +315,6 @@ func infoFromURL(
 		// use safer output filenmaes
 		// TODO: needed?
 		"--restrict-filenames",
-		// use .netrc authentication data
-		"--netrc",
 		// provide url via stdin for security, youtube-dl has some run command args
 		"--batch-file", "-",
 		// dump info json
@@ -590,6 +589,7 @@ func (result Result) DownloadWithOptions(
 	cmd := exec.CommandContext(
 		ctx,
 		ProbePath(),
+		"--verbose",
 		// see comment below about ignoring errors for playlists
 		"--ignore-errors",
 		// TODO: deprecated in yt-dlp?
@@ -599,8 +599,6 @@ func (result Result) DownloadWithOptions(
 		// use safer output filenmaes
 		// TODO: needed?
 		"--restrict-filenames",
-		// use .netrc authentication data
-		"--netrc",
 		// write to stdout
 		"--output", "-",
 	)

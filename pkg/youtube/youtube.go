@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"tunes/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/option"

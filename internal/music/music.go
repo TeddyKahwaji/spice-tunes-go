@@ -11,20 +11,34 @@ import (
 	"strings"
 	"time"
 
-	"tunes/internal/embeds"
-	"tunes/pkg/audiotype"
-	"tunes/pkg/spotify"
-	"tunes/pkg/util"
-	"tunes/pkg/youtube"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
 
-	"tunes/internal/goutubedl"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
+
+	fs "cloud.google.com/go/firestore"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/goutubedl"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 	"go.uber.org/zap"
 )
 
+type FireStore interface {
+	CreateDocument(ctx context.Context, collection string, document string, data interface{}) error
+	DeleteDocument(ctx context.Context, collection string, document string) error
+	GetDocumentFromCollection(ctx context.Context, collection string, document string) *fs.DocumentRef
+	UpdateDocument(ctx context.Context, collection string, document string, data map[string]interface{}) error
+}
+
+type TrackDataRetriever interface {
+	GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
+}
+
 type musicPlayerCog struct {
+	fireStoreClient  FireStore
 	session          *discordgo.Session
 	httpClient       *http.Client
 	logger           *zap.Logger
@@ -34,22 +48,8 @@ type musicPlayerCog struct {
 	ytSearchWrapper  *youtube.SearchWrapper
 }
 
-type Firebase interface {
-	CreateDocument(ctx context.Context, collection string, document string, data interface{}) error
-	DeleteDocument(ctx context.Context, collection string, document string) error
-	CloneFileFromStorage(ctx context.Context, bucketName string, sourceObject string, destinationObject string) error
-	DeleteFileFromStorage(ctx context.Context, bucketName string, objectName string) error
-	DownloadFileBytes(ctx context.Context, bucketName string, objectName string) (io.Reader, error)
-	GetDocumentFromCollection(ctx context.Context, collection string, document string) (map[string]interface{}, error)
-	GenerateSignedURL(bucketName string, objectName string) (string, error)
-	UpdateDocument(ctx context.Context, collection string, document string, data map[string]interface{}) error
-	UploadFileToStorage(ctx context.Context, bucketName string, objectName string, file *os.File, fileName string) error
-}
-type TrackDataRetriever interface {
-	GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
-}
-
 type CogConfig struct {
+	FireStoreClient      FireStore
 	Session              *discordgo.Session
 	Logger               *zap.Logger
 	HTTPClient           *http.Client
@@ -62,11 +62,13 @@ func NewMusicPlayerCog(config *CogConfig) (*musicPlayerCog, error) {
 		config.HTTPClient == nil ||
 		config.SpotifyWrapper == nil ||
 		config.YoutubeSearchWrapper == nil ||
-		config.Session == nil {
+		config.Session == nil ||
+		config.FireStoreClient == nil {
 		return nil, errors.New("config was populated with nil value")
 	}
 
 	musicCog := &musicPlayerCog{
+		fireStoreClient:  config.FireStoreClient,
 		session:          config.Session,
 		httpClient:       config.HTTPClient,
 		logger:           config.Logger,
@@ -254,7 +256,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			return fmt.Errorf("error unable to join voice channel: %w", err)
 		}
 
-		m.guildVoiceStates[interaction.GuildID] = newGuildPlayer(channelVoiceConnection, interaction.GuildID, interaction.ChannelID)
+		m.guildVoiceStates[interaction.GuildID] = newGuildPlayer(channelVoiceConnection, interaction.GuildID, interaction.ChannelID, m.fireStoreClient, m.spotifyClient)
 	}
 
 	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{

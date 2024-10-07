@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"sync"
 
-	"tunes/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
 
 	"github.com/zmb3/spotify"
 )
@@ -20,6 +20,20 @@ func NewSpotifyClientWrapper(client *spotify.Client) *SpotifyClientWrapper {
 	return &SpotifyClientWrapper{
 		client: client,
 	}
+}
+
+// Search track returns a spotifyID if a matching song was found on spotify
+func (s *SpotifyClientWrapper) SearchTrack(query string) (string, error) {
+	result, err := s.client.Search(query, spotify.SearchTypeTrack)
+	if err != nil {
+		return "", fmt.Errorf("searching track: %w", err)
+	}
+
+	if result.Tracks == nil || len(result.Tracks.Tracks) == 0 {
+		return "", audiotype.ErrSearchQueryNotFound
+	}
+
+	return result.Tracks.Tracks[0].ID.String(), nil
 }
 
 func (s *SpotifyClientWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {

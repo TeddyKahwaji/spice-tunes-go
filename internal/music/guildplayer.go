@@ -1,6 +1,7 @@
 package music
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -8,10 +9,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"tunes/internal/embeds"
-	"tunes/pkg/audiotype"
-	"tunes/pkg/util"
-	"tunes/pkg/views"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/views"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
@@ -26,33 +30,46 @@ const (
 	notPlaying voiceState = "NOT_PLAYING"
 )
 
+const (
+	guildCollection    string = "guilds"
+	userDataCollection string = "user-data"
+)
+
 var (
 	errStreamNonExistent = errors.New("no stream exists")
 	errNoMusicPlayerView = errors.New("guild player does not have a music player view")
 )
 
-type guildPlayer struct {
-	guildID     string
-	channelID   string
-	mu          sync.Mutex
-	voiceClient *discordgo.VoiceConnection
-	queue       []audiotype.TrackData
-	voiceState  voiceState
-	queuePtr    atomic.Int32
-	stream      *dca.StreamingSession
-	doneChannel chan error
-	stopChannel chan bool
-	view        *views.View
+type TrackSearcher interface {
+	SearchTrack(string) (string, error)
 }
 
-func newGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID string) *guildPlayer {
+type guildPlayer struct {
+	guildID         string
+	channelID       string
+	mu              sync.Mutex
+	voiceClient     *discordgo.VoiceConnection
+	queue           []audiotype.TrackData
+	voiceState      voiceState
+	queuePtr        atomic.Int32
+	stream          *dca.StreamingSession
+	doneChannel     chan error
+	stopChannel     chan bool
+	view            *views.View
+	fireStoreClient FireStore
+	trackSearcher   TrackSearcher
+}
+
+func newGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID string, fireStoreClient FireStore, trackSearcher TrackSearcher) *guildPlayer {
 	return &guildPlayer{
-		voiceClient: vc,
-		guildID:     guildID,
-		channelID:   channelID,
-		queue:       []audiotype.TrackData{},
-		voiceState:  notPlaying,
-		stopChannel: make(chan bool),
+		voiceClient:     vc,
+		guildID:         guildID,
+		channelID:       channelID,
+		queue:           []audiotype.TrackData{},
+		voiceState:      notPlaying,
+		stopChannel:     make(chan bool),
+		fireStoreClient: fireStoreClient,
+		trackSearcher:   trackSearcher,
 	}
 }
 
@@ -102,6 +119,25 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 	}
 }
 
+// This is a best case effort, if the song doesn't exist we don't like but don't propagate an error to the user
+// this will only return errors in non-404 case.
+func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error {
+	_, err := g.fireStoreClient.GetDocumentFromCollection(ctx, guildCollection, g.guildID).
+		Collection(userDataCollection).
+		Doc(userID).
+		Get(ctx)
+
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			// handle
+		}
+
+		return fmt.Errorf("getting document from collection: %w", err)
+	}
+
+	return nil
+}
+
 func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
 	if len(g.queue) == 0 {
 		return errors.New("cannot generate music player with empty queue")
@@ -142,6 +178,8 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		case "ClearBtn":
 			g.clearUpcomingTracks()
 			actionMessage = "💥 **Cleared...** ⏹"
+		case "LikeBtn":
+			g.likeCurrentSong(context.Background(), passedInteraction.Member.User.ID)
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
