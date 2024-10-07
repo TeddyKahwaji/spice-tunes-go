@@ -440,7 +440,13 @@ func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discor
 					return
 				}
 
-				delete(m.guildVoiceStates, vc.GuildID)
+				if guildPlayer, ok := m.guildVoiceStates[vc.GuildID]; ok {
+					if err := guildPlayer.destroyView(session); err != nil {
+						m.logger.Warn("unable to destroy music player view", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
+					}
+
+					delete(m.guildVoiceStates, vc.GuildID)
+				}
 			}
 		}
 	}
