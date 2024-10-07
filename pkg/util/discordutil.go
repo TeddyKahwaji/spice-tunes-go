@@ -23,19 +23,16 @@ func DeleteMessageAfterTime(session *discordgo.Session, channelID string, messag
 func GetVoiceChannelMemberCount(session *discordgo.Session, guildID, channelID string) (int, error) {
 	guild, err := session.State.Guild(guildID)
 	if err != nil {
-		return 0, fmt.Errorf("getting guild: %w", err)
+		return 0, fmt.Errorf("failed to get guild: %w", err)
 	}
 
 	memberCount := 0
 
-	// Loop through VoiceStates to find all members in the specific voice channel
-	for _, vs := range guild.VoiceStates {
-		if vs == nil || session == nil || session.State == nil || session.State.User == nil {
-			continue
-		}
-
-		if vs.ChannelID == channelID && (!vs.Member.User.Bot || vs.UserID == session.State.User.ID) {
-			memberCount++
+	for _, voiceState := range guild.VoiceStates {
+		if voiceState != nil && voiceState.Member != nil && voiceState.ChannelID == channelID {
+			if user := voiceState.Member.User; user != nil && (!user.Bot || user.ID == session.State.User.ID) {
+				memberCount++
+			}
 		}
 	}
 
