@@ -185,10 +185,6 @@ func (m *musicPlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	}
 
 	defer func() {
-		if err := file.Close(); err != nil {
-			m.logger.Warn("could not close file", zap.Error(err), zap.String("file_name", file.Name()))
-		}
-
 		if err := util.DeleteFile(file.Name()); err != nil {
 			m.logger.Warn("could not delete file", zap.Error(err), zap.String("file_name", file.Name()))
 		}

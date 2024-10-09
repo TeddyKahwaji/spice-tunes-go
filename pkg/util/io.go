@@ -24,6 +24,10 @@ func DownloadFileToTempDirectory(data io.Reader) (*os.File, error) {
 		return nil, fmt.Errorf("creating temp file: %w", err)
 	}
 
+	defer func() {
+		_ = tempFile.Close()
+	}()
+
 	if _, err = io.Copy(tempFile, data); err != nil {
 		return nil, fmt.Errorf("copying file content: %w", err)
 	}
