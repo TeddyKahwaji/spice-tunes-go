@@ -22,7 +22,7 @@ func NewSpotifyClientWrapper(client *spotify.Client) *SpotifyClientWrapper {
 	}
 }
 
-// Search track returns a spotifyID if a matching song was found on spotify
+// Search track returns a spotifyID if a matching song was found on spotify.
 func (s *SpotifyClientWrapper) SearchTrack(query string) (string, error) {
 	result, err := s.client.Search(query, spotify.SearchTypeTrack)
 	if err != nil {

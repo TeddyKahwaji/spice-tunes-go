@@ -42,6 +42,7 @@ var (
 	errStreamNonExistent = errors.New("no stream exists")
 	errNoMusicPlayerView = errors.New("guild player does not have a music player view")
 	errEmptyQueue        = errors.New("queue is empty")
+	errInvalidPosition   = errors.New("position provided is out of bounds")
 )
 
 type likedTrack struct {
@@ -331,6 +332,13 @@ func (g *guildPlayer) getCurrentPointer() int {
 	return int(g.queuePtr.Load())
 }
 
+func (g *guildPlayer) isValidPosition(position int) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	return position < len(g.queue)
+}
+
 // unlike resetQueue, this resets the queue to
 // only contain elements up to the queue ptr.
 func (g *guildPlayer) clearUpcomingTracks() {
@@ -353,6 +361,26 @@ func (g *guildPlayer) setVoiceState(voiceState voiceState) {
 
 func (g *guildPlayer) isPlaying() bool {
 	return g.voiceState == playing
+}
+
+func (g *guildPlayer) swap(firstPosition int, secondPosition int) error {
+	if !g.isValidPosition(firstPosition) || !g.isValidPosition(secondPosition) || firstPosition == 0 || secondPosition == 0 {
+		return errInvalidPosition
+	}
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.queue[firstPosition], g.queue[secondPosition] = g.queue[secondPosition], g.queue[firstPosition]
+
+	return nil
+}
+
+func (g *guildPlayer) getTrackAtPosition(position int) *audiotype.TrackData {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	return &g.queue[position]
 }
 
 func (g *guildPlayer) isPaused() bool {
@@ -401,7 +429,10 @@ func (g *guildPlayer) pause() error {
 // Returns the amount of tracks left in the queue based on the
 // current queue ptr
 func (g *guildPlayer) remainingQueueLength() int {
-	return len(g.queue) - (g.getCurrentPointer() + 1)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	return len(g.queue) - (g.getCurrentPointer())
 }
 
 func (g *guildPlayer) resume() error {

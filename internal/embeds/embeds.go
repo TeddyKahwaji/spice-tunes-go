@@ -53,6 +53,28 @@ func LikedSongEmbed(track *audiotype.TrackData) *discordgo.MessageEmbed {
 	}
 }
 
+func TracksSwappedEmbed(member *discordgo.Member, firstTrack *audiotype.TrackData, firstPositionSwapped int, secondTrack *audiotype.TrackData, secondPositionSwapped int) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Description: "✅ **Tracks Swapped**",
+		Color:       Blurple,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Value: fmt.Sprintf("`%s` has been moved to position: `%d`", firstTrack.TrackName, firstPositionSwapped),
+			},
+			{
+				Value: fmt.Sprintf("`%s` has been moved to position `%d`", secondTrack.TrackName, secondPositionSwapped),
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: "https://media.giphy.com/media/Qbm1Oget7e3vVl9uPB/giphy.gif",
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    "Swapped by: " + member.User.Username,
+			IconURL: member.AvatarURL(""),
+		},
+	}
+}
+
 func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Now Playing 🎵",

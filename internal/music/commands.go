@@ -39,4 +39,22 @@ var musicPlayerCommands = []*discordgo.ApplicationCommand{
 		Name:        "shuffle",
 		Description: "Shuffles the music queue",
 	},
+	{
+		Name:        "swap",
+		Description: "Swap the position of two tracks in the queue",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Name:        "first_position",
+				Description: "The position of the first track in the queue",
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Required:    true,
+			},
+			{
+				Name:        "second_position",
+				Description: "The position of the second track in the queue",
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Required:    true,
+			},
+		},
+	},
 }

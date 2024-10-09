@@ -305,7 +305,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 		return err
 	}
 
-	startingPtr := guildPlayer.getCurrentPointer()
+	addedPosition := guildPlayer.remainingQueueLength()
 	guildPlayer.addTracks(trackData.Tracks...)
 
 	if guildPlayer.isNotActive() {
@@ -317,7 +317,7 @@ func (m *musicPlayerCog) play(session *discordgo.Session, interaction *discordgo
 			m.logger.Warn("unable to refresh view state", zap.Error(err), zap.String("guild_id", interaction.GuildID))
 		}
 
-		addedTrackEmbed, err := embeds.AddedTracksEmbed(trackData, interaction.Member, startingPtr+1)
+		addedTrackEmbed, err := embeds.AddedTracksEmbed(trackData, interaction.Member, addedPosition)
 		if err != nil {
 			m.logger.Warn("was not able to provide user with added tracks message embed", zap.Error(err), zap.String("guild_id", interaction.GuildID))
 			return nil
@@ -683,6 +683,74 @@ func (m *musicPlayerCog) clear(session *discordgo.Session, interaction *discordg
 	return nil
 }
 
+func (m *musicPlayerCog) swap(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.isEmptyQueue() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("You can't swap from an empty queue")
+		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	options := interaction.ApplicationCommandData().Options
+
+	firstPosition, secondPosition := int(options[0].IntValue())-1, int(options[1].IntValue())-1
+
+	if err := guildPlayer.swap(firstPosition, secondPosition); err != nil {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("The positions you entered are incorrect, please check the queue and try again")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	newFirstTrack := guildPlayer.getTrackAtPosition(firstPosition)
+	newSecondTrack := guildPlayer.getTrackAtPosition(secondPosition)
+
+	if err := guildPlayer.refreshState(session); err != nil {
+		m.logger.Warn("unable to refresh music view state", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
+	}
+
+	if err := util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
+		Embeds: embeds.TracksSwappedEmbed(interaction.Member, newSecondTrack, firstPosition, newFirstTrack, secondPosition),
+	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
 func (m *musicPlayerCog) resume(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
@@ -747,6 +815,8 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 		err = m.clear(session, interaction)
 	case "shuffle":
 		err = m.shuffle(session, interaction)
+	case "swap":
+		err = m.swap(session, interaction)
 	}
 
 	if err != nil {
