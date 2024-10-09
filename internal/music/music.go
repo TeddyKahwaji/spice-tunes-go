@@ -92,9 +92,12 @@ func (m *musicPlayerCog) RegisterCommands(session *discordgo.Session) error {
 		return fmt.Errorf("bulk overwriting commands: %w", err)
 	}
 
+	// This handler will delegate all commands to their respective handler.
 	session.AddHandler(m.musicCogCommandHandler)
+	// Handler for when members join or leave a voice channel.
 	session.AddHandler(m.voiceStateUpdate)
-
+	// Handler for when bot is kicked out of a guild.
+	session.AddHandler(m.guildAddOrRemove)
 	return nil
 }
 
@@ -416,6 +419,13 @@ func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo
 	}
 
 	return nil
+}
+
+func (m *musicPlayerCog) guildAddOrRemove(_ *discordgo.Session, guildDeleteEvent *discordgo.GuildDelete) {
+	if _, ok := m.guildVoiceStates[guildDeleteEvent.ID]; ok {
+		delete(m.guildVoiceStates, guildDeleteEvent.ID)
+		m.logger.Info("bot has been kicked from guild", zap.String("guild_id", guildDeleteEvent.ID))
+	}
 }
 
 func (m *musicPlayerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.VoiceStateUpdate) {
