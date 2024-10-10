@@ -14,54 +14,68 @@ type ComponentHandler struct {
 	MessageComponents []discordgo.MessageComponent
 }
 
-type ViewConfig struct {
+type Config struct {
 	Components *ComponentHandler
 	Embeds     []*discordgo.MessageEmbed
 	Content    string
-	customViewConfigOptions
+	customConfigOptions
 }
 
-type customViewConfigOptions struct {
+type customConfigOptions struct {
 	logger          *zap.Logger
 	deletionEnabled bool
 	deletionTimer   time.Duration
 }
 
-type ViewConfigOpts func(*ViewConfig)
+type ConfigOpts func(*Config)
 
-func WithLogger(logger *zap.Logger) ViewConfigOpts {
-	return func(v *ViewConfig) {
+func WithLogger(logger *zap.Logger) ConfigOpts {
+	return func(v *Config) {
 		v.logger = logger
 	}
 }
 
-func WithDeletion(deletionTimer *time.Duration) ViewConfigOpts {
-	return func(v *ViewConfig) {
+func WithDeletion(deletionTimer *time.Duration) ConfigOpts {
+	return func(v *Config) {
 		v.deletionEnabled = true
 		v.deletionTimer = *deletionTimer
 	}
 }
 
 type View struct {
-	viewConfig ViewConfig
-	MessageID  string
-	ChannelID  string
+	Config    Config
+	message   *discordgo.Message
+	MessageID string
+	ChannelID string
 }
 
 type Handler func(*discordgo.Interaction) error
 
-func NewView(viewConfig ViewConfig, opts ...ViewConfigOpts) *View {
+func NewView(Config Config, opts ...ConfigOpts) *View {
 	for _, opt := range opts {
-		opt(&viewConfig)
+		opt(&Config)
 	}
 
 	return &View{
-		viewConfig: viewConfig,
+		Config: Config,
 	}
 }
 
+func (v *View) EditView(viewConfig Config, session *discordgo.Session) error {
+	if _, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:         v.MessageID,
+		Channel:    v.ChannelID,
+		Components: &viewConfig.Components.MessageComponents,
+		Embeds:     &viewConfig.Embeds,
+	}); err != nil {
+		return fmt.Errorf("editing complex message: %w", err)
+	}
+
+	return nil
+}
+
 func (v *View) SendView(interaction *discordgo.Interaction, session *discordgo.Session, handler Handler) error {
-	config := v.viewConfig
+	config := v.Config
 	channelID := interaction.ChannelID
 
 	messageSendData := &discordgo.WebhookParams{
@@ -86,8 +100,8 @@ func (v *View) SendView(interaction *discordgo.Interaction, session *discordgo.S
 		return fmt.Errorf("empty message: %w", err)
 	}
 
-	if v.viewConfig.deletionEnabled {
-		if err := util.DeleteMessageAfterTime(session, channelID, message.ID, v.viewConfig.deletionTimer); err != nil {
+	if v.Config.deletionEnabled {
+		if err := util.DeleteMessageAfterTime(session, channelID, message.ID, v.Config.deletionTimer); err != nil {
 			return fmt.Errorf("deleting message after time threshold: %w", err)
 		}
 	}
@@ -99,8 +113,8 @@ func (v *View) SendView(interaction *discordgo.Interaction, session *discordgo.S
 
 		if passedInteraction.Message.ID == message.ID {
 			if err := handler(passedInteraction.Interaction); err != nil {
-				if v.viewConfig.logger != nil {
-					v.viewConfig.logger.Error("message component handler failed",
+				if v.Config.logger != nil {
+					v.Config.logger.Error("message component handler failed",
 						zap.Error(err), zap.String("messageID", passedInteraction.Message.ID),
 						zap.String("customMessageID", passedInteraction.MessageComponentData().CustomID))
 				}
@@ -112,6 +126,7 @@ func (v *View) SendView(interaction *discordgo.Interaction, session *discordgo.S
 
 	v.MessageID = message.ID
 	v.ChannelID = message.ChannelID
+	v.message = message
 
 	return nil
 }

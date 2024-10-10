@@ -10,46 +10,6 @@ type MusicPlayButtonsConfig struct {
 	Resume          bool
 }
 
-type PaginationListButtonsConfig struct {
-	SkipToLastPageDisabled  bool
-	BackToFirstPageDisabled bool
-	BackDisabled            bool
-	SkipDisabled            bool
-}
-
-func GetPaginationListButtons(config PaginationListButtonsConfig) []discordgo.MessageComponent {
-	return []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Disabled: config.BackToFirstPageDisabled,
-					CustomID: "FirstPageBtn",
-					Label:    "|<",
-					Style:    discordgo.SuccessButton,
-				},
-				discordgo.Button{
-					Disabled: config.BackDisabled,
-					CustomID: "BackBtn",
-					Label:    "<",
-					Style:    discordgo.PrimaryButton,
-				},
-				discordgo.Button{
-					Disabled: config.SkipDisabled,
-					CustomID: "SkipBtn",
-					Label:    ">",
-					Style:    discordgo.PrimaryButton,
-				},
-				discordgo.Button{
-					Disabled: config.SkipToLastPageDisabled,
-					CustomID: "LastPageBtn",
-					Label:    ">|",
-					Style:    discordgo.SuccessButton,
-				},
-			},
-		},
-	}
-}
-
 func GetMusicPlayerButtons(config MusicPlayButtonsConfig) []discordgo.MessageComponent {
 	pauseResumeBtn := discordgo.Button{
 		Disabled: false,

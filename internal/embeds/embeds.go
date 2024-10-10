@@ -75,7 +75,7 @@ func TracksSwappedEmbed(member *discordgo.Member, firstTrack *audiotype.TrackDat
 	}
 }
 
-func QueueEmbed(tracks []*audiotype.TrackData, guild *discordgo.Guild, pageNumber int, separator int) *discordgo.MessageEmbed {
+func QueueEmbed(tracks []*audiotype.TrackData, pageNumber int, separator int, guild *discordgo.Guild) *discordgo.MessageEmbed {
 	result := &discordgo.MessageEmbed{
 		Title: fmt.Sprintf("%s's Queue", guild.Name),
 		Color: Blurple,

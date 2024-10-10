@@ -91,7 +91,7 @@ func (g *guildPlayer) hasView() bool {
 	return g.view != nil
 }
 
-func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
+func (g *guildPlayer) getMusicPlayerViewConfig() views.Config {
 	currentTrack := g.queue[g.queuePtr.Load()]
 
 	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack)
@@ -125,7 +125,7 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 
 	musicPlayerButtons := embeds.GetMusicPlayerButtons(buttonsConfig)
 
-	return views.ViewConfig{
+	return views.Config{
 		Components: &views.ComponentHandler{
 			MessageComponents: musicPlayerButtons,
 		},
@@ -178,70 +178,33 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 	return nil
 }
 
-func (g *guildPlayer) getQueueViewConfig(pageNum int, totalPages int, queueEmbed *discordgo.MessageEmbed) views.ViewConfig {
-	buttonsConfig := embeds.PaginationListButtonsConfig{
-		SkipToLastPageDisabled:  pageNum == totalPages,
-		SkipDisabled:            pageNum == totalPages,
-		BackToFirstPageDisabled: pageNum == 1,
-		BackDisabled:            pageNum == 1,
-	}
-
-	queueButtons := embeds.GetPaginationListButtons(buttonsConfig)
-
-	return views.ViewConfig{
-		Components: &views.ComponentHandler{
-			MessageComponents: queueButtons,
-		},
-		Embeds: []*discordgo.MessageEmbed{queueEmbed},
-	}
-}
-
 func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	guild, err := util.GetGuild(session, interaction.GuildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting guild: %w", err)
 	}
 
 	separator := 8
 	paginationConfig := views.NewPaginatedConfig(g.queue[g.getCurrentPointer()+1:], separator)
-	pages := paginationConfig.GetPages()
 
-	currentPageNum := 1
-	totalPages := len(pages)
-
-	queuePagesEmbeds := make([]*discordgo.MessageEmbed, 0, totalPages)
-	for pageNum, pageData := range pages {
-		queuePagesEmbeds = append(queuePagesEmbeds, embeds.QueueEmbed(pageData, guild, pageNum+1, separator))
+	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
+		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
 	}
 
-	viewConfig := g.getQueueViewConfig(currentPageNum, totalPages, queuePagesEmbeds[0])
-	queueView := views.NewView(viewConfig, views.WithLogger(logger))
-
+	viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
 	handler := func(passedInteraction *discordgo.Interaction) error {
 		messageID := passedInteraction.Message.ID
-		messageCustomID := passedInteraction.MessageComponentData().CustomID
-
-		switch messageCustomID {
-		case "FirstPageBtn":
-			currentPageNum = 1
-		case "BackBtn":
-			currentPageNum--
-		case "SkipBtn":
-			currentPageNum++
-		case "LastPageBtn":
-			currentPageNum = len(pages)
-		}
-
-		viewConfig := g.getQueueViewConfig(currentPageNum, totalPages, queuePagesEmbeds[currentPageNum-1])
+		viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
 		_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			ID:         messageID,
 			Channel:    passedInteraction.ChannelID,
 			Components: &viewConfig.Components.MessageComponents,
 			Embeds:     &viewConfig.Embeds,
 		})
+
 		if err != nil {
 			return fmt.Errorf("editing complex message: %w", err)
 		}
@@ -253,6 +216,11 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 
 		return nil
 	}
+
+	// GetBaseHandler, will handle the button interactions while the passed handler will execute
+	// after updating button state
+	handler = paginationConfig.GetBaseHandler(session, handler)
+	queueView := views.NewView(*viewConfig, views.WithLogger(logger))
 
 	if err := queueView.SendView(interaction, session, handler); err != nil {
 		return fmt.Errorf("sending queue view: %w", err)
@@ -369,15 +337,8 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 	}
 
 	viewConfig := g.getMusicPlayerViewConfig()
-
-	_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         g.view.MessageID,
-		Channel:    g.view.ChannelID,
-		Components: &viewConfig.Components.MessageComponents,
-		Embeds:     &viewConfig.Embeds,
-	})
-	if err != nil {
-		return fmt.Errorf("editing complex message: %w", err)
+	if err := g.view.EditView(viewConfig, session); err != nil {
+		return fmt.Errorf("editing view : %w", err)
 	}
 
 	return nil
