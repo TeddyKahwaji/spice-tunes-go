@@ -109,7 +109,7 @@ func (yt *SearchWrapper) handleSingleTrack(requesterName string, ID string) (*au
 		return nil, fmt.Errorf("requesting single video: %w", err)
 	}
 
-	trackData := make([]audiotype.TrackData, 0, 1)
+	trackData := make([]*audiotype.TrackData, 0, 1)
 
 	if len(resp.Items) == 0 {
 		return nil, audiotype.ErrSearchQueryNotFound
@@ -132,7 +132,7 @@ func (yt *SearchWrapper) handleSingleTrack(requesterName string, ID string) (*au
 		return nil, fmt.Errorf("retrieving duration of video: %w", err)
 	}
 
-	trackData = append(trackData, audiotype.TrackData{
+	trackData = append(trackData, &audiotype.TrackData{
 		TrackImageURL: thumbnailURL,
 		TrackName:     item.Snippet.Title,
 		Query:         YoutubeVideoBase + ID,
@@ -196,7 +196,7 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 		PlaylistId(ID).
 		MaxResults(100)
 
-	trackData := []audiotype.TrackData{}
+	trackData := []*audiotype.TrackData{}
 
 	playlistMetaData, err := yt.getPlaylistMetaData(ID)
 	if err != nil {
@@ -219,7 +219,7 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 
 		eg.Go(func() error {
 			for _, item := range items {
-				data := audiotype.TrackData{
+				data := &audiotype.TrackData{
 					Requester: requesterName,
 				}
 

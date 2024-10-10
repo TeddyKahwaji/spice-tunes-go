@@ -9,7 +9,7 @@ type applicationCommand struct {
 	handler              applicationCommandHandler
 }
 
-func (m *musicPlayerCog) getApplicationCommands() map[string]*applicationCommand {
+func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
 	return map[string]*applicationCommand{
 		"play": {
 			handler: m.play,

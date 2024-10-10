@@ -10,7 +10,7 @@ import (
 func DeleteMessageAfterTime(session *discordgo.Session, channelID string, messageID string, timeDelay time.Duration) error {
 	message, err := session.ChannelMessage(channelID, messageID)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting channel message: %w", err)
 	}
 
 	time.AfterFunc(timeDelay, func() {
@@ -18,6 +18,15 @@ func DeleteMessageAfterTime(session *discordgo.Session, channelID string, messag
 	})
 
 	return nil
+}
+
+func GetGuild(session *discordgo.Session, guildID string) (*discordgo.Guild, error) {
+	guild, err := session.State.Guild(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("getting guild: %w", err)
+	}
+
+	return guild, nil
 }
 
 func GetVoiceChannelMemberCount(session *discordgo.Session, guildID, channelID string) (int, error) {

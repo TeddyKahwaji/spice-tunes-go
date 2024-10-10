@@ -136,7 +136,7 @@ func main() {
 			YoutubeSearchWrapper: youtubeSearchWrapper,
 		}
 
-		musicPlayerCog, err := music.NewMusicPlayerCog(musicCogConfig)
+		musicPlayerCog, err := music.NewPlayerCog(musicCogConfig)
 		if err != nil {
 			logger.Fatal("unable to instantiate greeter cog", zap.Error(err))
 		}

@@ -97,7 +97,7 @@ func (s *SpotifyClientWrapper) getPlaylistMetaData(spotifyTrackID string) (*audi
 }
 
 func (s *SpotifyClientWrapper) handleSingleTrackData(requesterName string, spotifyTrackID string) (*audiotype.Data, error) {
-	trackData := make([]audiotype.TrackData, 0, 1)
+	trackData := make([]*audiotype.TrackData, 0, 1)
 
 	track, err := s.client.GetTrack(spotify.ID(spotifyTrackID))
 	if err != nil {
@@ -105,7 +105,7 @@ func (s *SpotifyClientWrapper) handleSingleTrackData(requesterName string, spoti
 	}
 
 	trackTitle := track.Name + " - " + track.Artists[0].Name
-	trackData = append(trackData, audiotype.TrackData{
+	trackData = append(trackData, &audiotype.TrackData{
 		TrackName:     trackTitle,
 		TrackImageURL: track.Album.Images[0].URL,
 		Query:         "ytsearch1:" + trackTitle,
@@ -125,7 +125,7 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 		mu sync.Mutex
 	)
 
-	trackData := []audiotype.TrackData{}
+	trackData := []*audiotype.TrackData{}
 	result, err := s.client.GetAlbum(spotify.ID(spotifyTrackID))
 	if err != nil {
 		return nil, fmt.Errorf("getting album track items: %w", err)
@@ -139,7 +139,7 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 		playlistData.PlaylistImageURL = result.Images[0].URL
 	}
 
-	orderedData := make(map[int][]audiotype.TrackData)
+	orderedData := make(map[int][]*audiotype.TrackData)
 
 	page := 0
 	for ; ; page++ {
@@ -149,10 +149,10 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 		go func(tracks []spotify.SimpleTrack) {
 			defer wg.Done()
 
-			data := make([]audiotype.TrackData, 0, len(tracks))
+			data := make([]*audiotype.TrackData, 0, len(tracks))
 			for _, track := range tracks {
 				fullTrackName := track.Name + " - " + track.Artists[0].Name
-				data = append(data, audiotype.TrackData{
+				data = append(data, &audiotype.TrackData{
 					TrackName:     track.Name + " - " + track.Artists[0].Name,
 					TrackImageURL: result.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
@@ -202,7 +202,7 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 		return nil, err
 	}
 
-	trackData := []audiotype.TrackData{}
+	trackData := []*audiotype.TrackData{}
 	result, err := s.client.GetPlaylistTracksOpt(spotify.ID(spotifyTrackID), &spotify.Options{
 		Offset: &offset,
 		Limit:  &limit,
@@ -211,7 +211,7 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
 
-	orderedData := make(map[int][]audiotype.TrackData)
+	orderedData := make(map[int][]*audiotype.TrackData)
 
 	page := 0
 	for ; ; page++ {
@@ -221,10 +221,10 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 		go func(tracks []spotify.PlaylistTrack) {
 			defer wg.Done()
 
-			data := make([]audiotype.TrackData, 0, len(tracks))
+			data := make([]*audiotype.TrackData, 0, len(tracks))
 			for _, track := range tracks {
 				fullTrackName := track.Track.Name + " - " + track.Track.Artists[0].Name
-				data = append(data, audiotype.TrackData{
+				data = append(data, &audiotype.TrackData{
 					TrackName:     fullTrackName,
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,

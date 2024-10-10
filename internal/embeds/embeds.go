@@ -75,7 +75,29 @@ func TracksSwappedEmbed(member *discordgo.Member, firstTrack *audiotype.TrackDat
 	}
 }
 
-func MusicPlayerEmbed(trackData audiotype.TrackData) *discordgo.MessageEmbed {
+func QueueEmbed(tracks []*audiotype.TrackData, guild *discordgo.Guild, pageNumber int, separator int) *discordgo.MessageEmbed {
+	result := &discordgo.MessageEmbed{
+		Title: fmt.Sprintf("%s's Queue", guild.Name),
+		Color: Blurple,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    fmt.Sprintf("Page %d", pageNumber),
+			IconURL: guild.IconURL(""),
+		},
+	}
+
+	queueIndex := ((pageNumber * separator) + 1) - separator
+	for _, trackData := range tracks {
+		result.Fields = append(result.Fields, &discordgo.MessageEmbedField{
+			Value: fmt.Sprintf("```%d: %s```", queueIndex, trackData.TrackName),
+		})
+
+		queueIndex++
+	}
+
+	return result
+}
+
+func MusicPlayerEmbed(trackData *audiotype.TrackData) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Now Playing 🎵",
 		Description: trackData.TrackName,

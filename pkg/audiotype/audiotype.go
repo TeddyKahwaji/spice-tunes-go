@@ -23,7 +23,7 @@ type PlaylistData struct {
 }
 
 type Data struct {
-	Tracks       []TrackData
+	Tracks       []*TrackData
 	Type         SupportedAudioType
 	PlaylistData *PlaylistData
 }

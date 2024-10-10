@@ -55,7 +55,7 @@ type userData struct {
 }
 
 type TrackSearcher interface {
-	SearchTrack(string) (string, error)
+	SearchTrack(trackName string) (string, error)
 }
 
 type guildPlayer struct {
@@ -63,7 +63,7 @@ type guildPlayer struct {
 	channelID       string
 	mu              sync.Mutex
 	voiceClient     *discordgo.VoiceConnection
-	queue           []audiotype.TrackData
+	queue           []*audiotype.TrackData
 	voiceState      voiceState
 	queuePtr        atomic.Int32
 	stream          *dca.StreamingSession
@@ -79,7 +79,7 @@ func newGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID str
 		voiceClient:     vc,
 		guildID:         guildID,
 		channelID:       channelID,
-		queue:           []audiotype.TrackData{},
+		queue:           []*audiotype.TrackData{},
 		voiceState:      notPlaying,
 		stopChannel:     make(chan bool),
 		fireStoreClient: fireStoreClient,
@@ -136,10 +136,6 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.ViewConfig {
 // This is a best case effort, if the song doesn't exist we don't like but don't propagate an error to the user
 // this will only return errors in non-404 case.
 func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error {
-	if g.isEmptyQueue() {
-		return errEmptyQueue
-	}
-
 	currentSong := g.getCurrentSong()
 
 	spotifyTrackID, err := g.trackSearcher.SearchTrack(currentSong.TrackName)
@@ -182,9 +178,92 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 	return nil
 }
 
+func (g *guildPlayer) getQueueViewConfig(pageNum int, totalPages int, queueEmbed *discordgo.MessageEmbed) views.ViewConfig {
+	buttonsConfig := embeds.PaginationListButtonsConfig{
+		SkipToLastPageDisabled:  pageNum == totalPages,
+		SkipDisabled:            pageNum == totalPages,
+		BackToFirstPageDisabled: pageNum == 1,
+		BackDisabled:            pageNum == 1,
+	}
+
+	queueButtons := embeds.GetPaginationListButtons(buttonsConfig)
+
+	return views.ViewConfig{
+		Components: &views.ComponentHandler{
+			MessageComponents: queueButtons,
+		},
+		Embeds: []*discordgo.MessageEmbed{queueEmbed},
+	}
+}
+
+func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	guild, err := util.GetGuild(session, interaction.GuildID)
+	if err != nil {
+		return err
+	}
+
+	separator := 8
+	paginationConfig := views.NewPaginatedConfig(g.queue[g.getCurrentPointer()+1:], separator)
+	pages := paginationConfig.GetPages()
+
+	currentPageNum := 1
+	totalPages := len(pages)
+
+	queuePagesEmbeds := make([]*discordgo.MessageEmbed, 0, totalPages)
+	for pageNum, pageData := range pages {
+		queuePagesEmbeds = append(queuePagesEmbeds, embeds.QueueEmbed(pageData, guild, pageNum+1, separator))
+	}
+
+	viewConfig := g.getQueueViewConfig(currentPageNum, totalPages, queuePagesEmbeds[0])
+	queueView := views.NewView(viewConfig, views.WithLogger(logger))
+
+	handler := func(passedInteraction *discordgo.Interaction) error {
+		messageID := passedInteraction.Message.ID
+		messageCustomID := passedInteraction.MessageComponentData().CustomID
+
+		switch messageCustomID {
+		case "FirstPageBtn":
+			currentPageNum = 1
+		case "BackBtn":
+			currentPageNum--
+		case "SkipBtn":
+			currentPageNum++
+		case "LastPageBtn":
+			currentPageNum = len(pages)
+		}
+
+		viewConfig := g.getQueueViewConfig(currentPageNum, totalPages, queuePagesEmbeds[currentPageNum-1])
+		_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			ID:         messageID,
+			Channel:    passedInteraction.ChannelID,
+			Components: &viewConfig.Components.MessageComponents,
+			Embeds:     &viewConfig.Embeds,
+		})
+		if err != nil {
+			return fmt.Errorf("editing complex message: %w", err)
+		}
+		if err := session.InteractionRespond(passedInteraction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+		}); err != nil {
+			return fmt.Errorf("sending update message: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := queueView.SendView(interaction, session, handler); err != nil {
+		return fmt.Errorf("sending queue view: %w", err)
+	}
+
+	return nil
+}
+
 func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
-	if len(g.queue) == 0 {
-		return errors.New("cannot generate music player with empty queue")
+	if g.isQueueDepleted() {
+		return errEmptyQueue
 	}
 
 	viewConfig := g.getMusicPlayerViewConfig()
@@ -216,7 +295,6 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 
 				actionMessage = "⏯️ **Resuming** 👍"
 			}
-
 		case "BackBtn":
 			g.rewind()
 			g.sendStopSignal()
@@ -250,7 +328,7 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		if actionMessage == "" {
 			currentSong := g.getCurrentSong()
 			if err := util.SendMessage(session, passedInteraction, true, util.MessageData{
-				Embeds: embeds.LikedSongEmbed(&currentSong),
+				Embeds: embeds.LikedSongEmbed(currentSong),
 				FlagWrapper: &util.FlagWrapper{
 					Flags: discordgo.MessageFlagsEphemeral,
 				},
@@ -321,7 +399,7 @@ func (g *guildPlayer) destroyView(session *discordgo.Session) error {
 	return nil
 }
 
-func (g *guildPlayer) getCurrentSong() audiotype.TrackData {
+func (g *guildPlayer) getCurrentSong() *audiotype.TrackData {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -359,12 +437,14 @@ func (g *guildPlayer) setVoiceState(voiceState voiceState) {
 	g.voiceState = voiceState
 }
 
-func (g *guildPlayer) isPlaying() bool {
-	return g.voiceState == playing
+// isBeforeQueuePtr checks if the given index is before the current queue pointer.
+// Returns true if the index is less than the position of the current pointer.
+func (g *guildPlayer) isBeforeQueuePtr(index int) bool {
+	return index < g.getCurrentPointer()
 }
 
 func (g *guildPlayer) swap(firstPosition int, secondPosition int) error {
-	if !g.isValidPosition(firstPosition) || !g.isValidPosition(secondPosition) || firstPosition == 0 || secondPosition == 0 {
+	if !g.isValidPosition(firstPosition) || !g.isValidPosition(secondPosition) || g.isBeforeQueuePtr(firstPosition) || g.isBeforeQueuePtr(secondPosition) {
 		return errInvalidPosition
 	}
 
@@ -380,7 +460,7 @@ func (g *guildPlayer) getTrackAtPosition(position int) *audiotype.TrackData {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	return &g.queue[position]
+	return g.queue[position]
 }
 
 func (g *guildPlayer) isPaused() bool {
@@ -391,9 +471,10 @@ func (g *guildPlayer) isNotActive() bool {
 	return g.voiceState == notPlaying
 }
 
-func (g *guildPlayer) addTracks(data ...audiotype.TrackData) {
+func (g *guildPlayer) addTracks(data ...*audiotype.TrackData) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
 	g.queue = append(g.queue, data...)
 }
 
@@ -401,7 +482,21 @@ func (g *guildPlayer) hasNext() bool {
 	return int(g.queuePtr.Load())+1 < len(g.queue)
 }
 
+// A queue length of 1 is considered an empty queue
+// because the first index is the current song playing.
 func (g *guildPlayer) isEmptyQueue() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	return len(g.queue) <= 2
+}
+
+// isQueueDepleted returns true when a guildPlayers queue
+// has no elements in it.
+func (g *guildPlayer) isQueueDepleted() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	return len(g.queue) == 0
 }
 
@@ -429,10 +524,14 @@ func (g *guildPlayer) pause() error {
 // Returns the amount of tracks left in the queue based on the
 // current queue ptr
 func (g *guildPlayer) remainingQueueLength() int {
+	if g.isQueueDepleted() {
+		return 0
+	}
+
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	return len(g.queue) - (g.getCurrentPointer())
+	return len(g.queue) - (g.getCurrentPointer()) - 1
 }
 
 func (g *guildPlayer) resume() error {
