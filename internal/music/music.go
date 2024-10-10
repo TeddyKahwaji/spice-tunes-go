@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
@@ -83,12 +86,14 @@ func NewMusicPlayerCog(config *CogConfig) (*musicPlayerCog, error) {
 	return musicCog, nil
 }
 
-func (m *musicPlayerCog) GetCommands() []*discordgo.ApplicationCommand {
-	return musicPlayerCommands
-}
-
+// this function is called when instantiating the music cog
 func (m *musicPlayerCog) RegisterCommands(session *discordgo.Session) error {
-	if _, err := session.ApplicationCommandBulkOverwrite(session.State.Application.ID, "", m.GetCommands()); err != nil {
+	commandMapping := slices.Collect(maps.Values(m.getApplicationCommands()))
+	commandsToRegister := funcs.Map(commandMapping, func(ac *applicationCommand) *discordgo.ApplicationCommand {
+		return ac.commandConfiguration
+	})
+
+	if _, err := session.ApplicationCommandBulkOverwrite(session.State.Application.ID, "", commandsToRegister); err != nil {
 		return fmt.Errorf("bulk overwriting commands: %w", err)
 	}
 
@@ -362,6 +367,10 @@ func (m *musicPlayerCog) verifyInChannelAndSendError(session *discordgo.Session,
 	}
 
 	return true, nil
+}
+
+func (m *musicPlayerCog) queue(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	return nil
 }
 
 func (m *musicPlayerCog) skip(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
@@ -804,36 +813,18 @@ func (m *musicPlayerCog) musicCogCommandHandler(session *discordgo.Session, inte
 		return
 	}
 
-	var err error
+	commandMapping := m.getApplicationCommands()
+	if command, ok := commandMapping[interaction.ApplicationCommandData().Name]; ok {
+		if err := command.handler(session, interaction); err != nil {
+			m.logger.Error("An error occurred during when executing command", zap.Error(err), zap.String("command", interaction.ApplicationCommandData().Name))
 
-	switch interaction.ApplicationCommandData().Name {
-	case "play":
-		err = m.play(session, interaction)
-	case "skip":
-		err = m.skip(session, interaction)
-	case "pause":
-		err = m.pause(session, interaction)
-	case "resume":
-		err = m.resume(session, interaction)
-	case "rewind":
-		err = m.rewind(session, interaction)
-	case "clear":
-		err = m.clear(session, interaction)
-	case "shuffle":
-		err = m.shuffle(session, interaction)
-	case "swap":
-		err = m.swap(session, interaction)
-	}
-
-	if err != nil {
-		m.logger.Error("An error occurred during when executing command", zap.Error(err), zap.String("command", interaction.ApplicationCommandData().Name))
-
-		err := util.SendMessage(session, interaction.Interaction, false, util.MessageData{
-			Embeds: embeds.UnexpectedErrorEmbed(),
-			Type:   discordgo.InteractionResponseChannelMessageWithSource,
-		}, util.WithDeletion(time.Second*30, interaction.ChannelID))
-		if err != nil {
-			m.logger.Error("Failed to send unexpected error message", zap.Error(err))
+			err := util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+				Embeds: embeds.UnexpectedErrorEmbed(),
+				Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			}, util.WithDeletion(time.Second*30, interaction.ChannelID))
+			if err != nil {
+				m.logger.Error("Failed to send unexpected error message", zap.Error(err))
+			}
 		}
 	}
 }
