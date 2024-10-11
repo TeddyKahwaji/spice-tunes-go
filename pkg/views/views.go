@@ -74,6 +74,14 @@ func (v *View) EditView(viewConfig Config, session *discordgo.Session) error {
 	return nil
 }
 
+func (v *View) DeleteView(session *discordgo.Session) error {
+	if err := session.ChannelMessageDelete(v.ChannelID, v.MessageID); err != nil {
+		return fmt.Errorf("deleting channel message: %w", err)
+	}
+
+	return nil
+}
+
 func (v *View) SendView(interaction *discordgo.Interaction, session *discordgo.Session, handler Handler) error {
 	config := v.Config
 	channelID := interaction.ChannelID

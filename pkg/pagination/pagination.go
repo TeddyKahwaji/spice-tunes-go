@@ -1,6 +1,7 @@
-package views
+package pagination
 
 import (
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/views"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -100,7 +101,7 @@ func (p *PaginationConfig[T]) GetPages() [][]*T {
 // GetBaseHandler returns a handler function that processes pagination button clicks.
 // It updates the current page number based on the button clicked (First, Back, Next, Last),
 // and calls the afterHandler to refresh the embed or perform additional logic.
-func (p *PaginationConfig[T]) GetBaseHandler(session *discordgo.Session, afterHandler Handler) Handler {
+func (p *PaginationConfig[T]) GetBaseHandler(session *discordgo.Session, afterHandler views.Handler) views.Handler {
 	return func(passedInteraction *discordgo.Interaction) error {
 		// Determine which button was clicked based on its custom ID.
 		messageCustomID := passedInteraction.MessageComponentData().CustomID
@@ -126,7 +127,7 @@ func (p *PaginationConfig[T]) GetBaseHandler(session *discordgo.Session, afterHa
 
 // GetViewConfig generates a ViewConfig that includes paginated embeds and the appropriate pagination buttons.
 // It takes a function to generate embeds for each page and constructs a new ViewConfig based on the current page and total pages.
-func (p *PaginationConfig[T]) GetViewConfig(paginationEmbedRetriever GetPaginationEmbed[T]) *Config {
+func (p *PaginationConfig[T]) GetViewConfig(paginationEmbedRetriever GetPaginationEmbed[T]) *views.Config {
 	// Split the data into pages.
 	pages := p.GetPages()
 
@@ -148,8 +149,8 @@ func (p *PaginationConfig[T]) GetViewConfig(paginationEmbedRetriever GetPaginati
 	paginationButtons := GetPaginationListButtons(buttonsConfig)
 
 	// Return a new ViewConfig with the current page's embed and the corresponding buttons.
-	return &Config{
-		Components: &ComponentHandler{
+	return &views.Config{
+		Components: &views.ComponentHandler{
 			MessageComponents: paginationButtons,
 		},
 		Embeds: []*discordgo.MessageEmbed{paginationEmbeds[*p.pageNum-1]},

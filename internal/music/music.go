@@ -221,10 +221,7 @@ func (m *playerCog) playAudio(guildPlayer *guildPlayer) error {
 					} else {
 						guildPlayer.setVoiceState(notPlaying)
 						guildPlayer.resetQueue()
-
-						if err := guildPlayer.destroyView(m.session); err != nil {
-							m.logger.Warn("unable to destroy music player view", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
-						}
+						guildPlayer.destroyAllViews(m.session)
 					}
 				} else {
 					m.logger.Warn("error during audio stream", zap.Error(err))
@@ -263,7 +260,7 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 			return fmt.Errorf("error unable to join voice channel: %w", err)
 		}
 
-		m.guildVoiceStates[interaction.GuildID] = newGuildPlayer(channelVoiceConnection, interaction.GuildID, interaction.ChannelID, m.fireStoreClient, m.spotifyClient)
+		m.guildVoiceStates[interaction.GuildID] = newGuildPlayer(channelVoiceConnection, interaction.ChannelID, m.fireStoreClient, m.spotifyClient, m.logger.With(zap.String("guild_id", interaction.GuildID)))
 	}
 
 	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
@@ -447,9 +444,7 @@ func (m *playerCog) skip(session *discordgo.Session, interaction *discordgo.Inte
 		}
 	} else {
 		guildPlayer.resetQueue()
-		if err := guildPlayer.destroyView(session); err != nil {
-			m.logger.Warn("could not destroy guild player view", zap.Error(err), zap.String("guild_id", interaction.GuildID))
-		}
+		guildPlayer.destroyAllViews(session)
 	}
 
 	guildPlayer.sendStopSignal()
@@ -494,10 +489,7 @@ func (m *playerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.V
 				}
 
 				if guildPlayer, ok := m.guildVoiceStates[vc.GuildID]; ok {
-					if err := guildPlayer.destroyView(session); err != nil {
-						m.logger.Warn("unable to destroy music player view", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
-					}
-
+					guildPlayer.destroyAllViews(session)
 					delete(m.guildVoiceStates, vc.GuildID)
 				}
 			}

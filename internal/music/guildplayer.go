@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/pagination"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/views"
 
@@ -40,7 +41,7 @@ const (
 
 var (
 	errStreamNonExistent = errors.New("no stream exists")
-	errNoMusicPlayerView = errors.New("guild player does not have a music player view")
+	errNoViews           = errors.New("guild player does not have any views")
 	errEmptyQueue        = errors.New("queue is empty")
 	errInvalidPosition   = errors.New("position provided is out of bounds")
 )
@@ -58,10 +59,23 @@ type TrackSearcher interface {
 	SearchTrack(trackName string) (string, error)
 }
 
+type supportedView string
+
+var (
+	musicPlayer supportedView = "MusicPlayerView"
+	queue       supportedView = "QueuePlayerView"
+)
+
+type guildView struct {
+	view     *views.View
+	viewType supportedView
+}
+
 type guildPlayer struct {
 	guildID         string
 	channelID       string
 	mu              sync.Mutex
+	logger          *zap.Logger
 	voiceClient     *discordgo.VoiceConnection
 	queue           []*audiotype.TrackData
 	voiceState      voiceState
@@ -69,17 +83,19 @@ type guildPlayer struct {
 	stream          *dca.StreamingSession
 	doneChannel     chan error
 	stopChannel     chan bool
-	view            *views.View
+	views           []*guildView
 	fireStoreClient FireStore
 	trackSearcher   TrackSearcher
 }
 
-func newGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID string, fireStoreClient FireStore, trackSearcher TrackSearcher) *guildPlayer {
+func newGuildPlayer(vc *discordgo.VoiceConnection, channelID string, fireStoreClient FireStore, trackSearcher TrackSearcher, logger *zap.Logger) *guildPlayer {
 	return &guildPlayer{
 		voiceClient:     vc,
-		guildID:         guildID,
+		guildID:         vc.GuildID,
 		channelID:       channelID,
 		queue:           []*audiotype.TrackData{},
+		views:           []*guildView{},
+		logger:          logger,
 		voiceState:      notPlaying,
 		stopChannel:     make(chan bool),
 		fireStoreClient: fireStoreClient,
@@ -88,7 +104,7 @@ func newGuildPlayer(vc *discordgo.VoiceConnection, guildID string, channelID str
 }
 
 func (g *guildPlayer) hasView() bool {
-	return g.view != nil
+	return len(g.views) > 0
 }
 
 func (g *guildPlayer) getMusicPlayerViewConfig() views.Config {
@@ -188,7 +204,7 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 	}
 
 	separator := 8
-	paginationConfig := views.NewPaginatedConfig(g.queue[g.getCurrentPointer()+1:], separator)
+	paginationConfig := pagination.NewPaginatedConfig(g.queue[g.getCurrentPointer()+1:], separator)
 
 	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
 		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
@@ -225,6 +241,11 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 	if err := queueView.SendView(interaction, session, handler); err != nil {
 		return fmt.Errorf("sending queue view: %w", err)
 	}
+
+	g.views = append(g.views, &guildView{
+		view:     queueView,
+		viewType: queue,
+	})
 
 	return nil
 }
@@ -326,38 +347,43 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		return fmt.Errorf("sending music player view: %w", err)
 	}
 
-	g.view = musicPlayerView
+	g.views = append(g.views, &guildView{
+		view:     musicPlayerView,
+		viewType: musicPlayer,
+	})
 
 	return nil
 }
 
 func (g *guildPlayer) refreshState(session *discordgo.Session) error {
-	if g.view == nil {
-		return errNoMusicPlayerView
+	if len(g.views) == 0 {
+		return errNoViews
 	}
 
-	viewConfig := g.getMusicPlayerViewConfig()
-	if err := g.view.EditView(viewConfig, session); err != nil {
-		return fmt.Errorf("editing view : %w", err)
+	musicViewConfig := g.getMusicPlayerViewConfig()
+	for _, guildView := range g.views {
+		if guildView.viewType == musicPlayer {
+			if err := guildView.view.EditView(musicViewConfig, session); err != nil {
+				return fmt.Errorf("editing view : %w", err)
+			}
+		}
 	}
 
 	return nil
 }
 
-func (g *guildPlayer) destroyView(session *discordgo.Session) error {
-	if g.view == nil {
-		return nil
+func (g *guildPlayer) destroyAllViews(session *discordgo.Session) {
+	if len(g.views) == 0 {
+		return
 	}
 
-	defer func() {
-		g.view = nil
-	}()
-
-	if err := session.ChannelMessageDelete(g.view.ChannelID, g.view.MessageID); err != nil {
-		return fmt.Errorf("deleting message: %w", err)
+	for _, guildView := range g.views {
+		if err := guildView.view.DeleteView(session); err != nil {
+			g.logger.Warn("unable to delete view", zap.Error(err))
+		}
 	}
 
-	return nil
+	g.views = g.views[:0]
 }
 
 func (g *guildPlayer) getCurrentSong() *audiotype.TrackData {
