@@ -78,7 +78,7 @@ type guildView struct {
 type guildPlayer struct {
 	guildID         string
 	channelID       string
-	mu              sync.Mutex
+	mu              sync.RWMutex
 	logger          *zap.Logger
 	voiceClient     *discordgo.VoiceConnection
 	queue           []*audiotype.TrackData
@@ -426,8 +426,8 @@ func (g *guildPlayer) destroyAllViews(session *discordgo.Session) {
 }
 
 func (g *guildPlayer) getCurrentSong() *audiotype.TrackData {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 
 	return g.queue[g.queuePtr.Load()]
 }
