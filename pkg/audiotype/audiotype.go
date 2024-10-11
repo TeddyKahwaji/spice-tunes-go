@@ -16,16 +16,18 @@ type TrackData struct {
 	Query         string        `firestore:"query"`
 	Requester     string        `firestore:"requester"`
 	Duration      time.Duration `firestore:"duration"`
+	ID            string        `firestore:"ID"`
 }
 type PlaylistData struct {
-	PlaylistName     string
-	PlaylistImageURL string
+	PlaylistName     string `firestore:"playlist_name"`
+	PlaylistImageURL string `firestore:"playlist_image_url"`
 }
 
 type Data struct {
-	Tracks       []*TrackData
-	Type         SupportedAudioType
-	PlaylistData *PlaylistData
+	Tracks       []*TrackData       `firestore:"track_data"`
+	Type         SupportedAudioType `firestore:"supported_audio_type"`
+	PlaylistData *PlaylistData      `firestore:"playlist_data,omitempty"`
+	ID           string             `firestore:"ID"`
 }
 
 const (

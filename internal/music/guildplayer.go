@@ -34,9 +34,9 @@ const (
 )
 
 const (
-	guildCollection    string = "guilds"
-	userDataCollection string = "user-data"
-	likedTracksPath    string = "liked_tracks"
+	guildCollection    string = "Guilds"
+	userDataCollection string = "UserData"
+	likedTracksPath    string = "LikedTracks"
 )
 
 const (
@@ -50,17 +50,8 @@ var (
 	errInvalidPosition   = errors.New("position provided is out of bounds")
 )
 
-type likedTrack struct {
-	SpotifyTrackID string `firestore:"spotifyTrackId"`
-}
-
 type userData struct {
-	LikedTracks    []likedTrack          `firestore:"liked_tracks"`
-	SavedPlaylists []audiotype.TrackData `firestore:"playlists"`
-}
-
-type TrackSearcher interface {
-	SearchTrack(trackName string) (string, error)
+	LikedTracks []*audiotype.TrackData `firestore:"LikedTracks"`
 }
 
 type supportedView string
@@ -89,10 +80,9 @@ type guildPlayer struct {
 	stopChannel     chan bool
 	views           map[*guildView]struct{}
 	fireStoreClient FireStore
-	trackSearcher   TrackSearcher
 }
 
-func newGuildPlayer(vc *discordgo.VoiceConnection, channelID string, fireStoreClient FireStore, trackSearcher TrackSearcher, logger *zap.Logger) *guildPlayer {
+func newGuildPlayer(vc *discordgo.VoiceConnection, channelID string, fireStoreClient FireStore, logger *zap.Logger) *guildPlayer {
 	return &guildPlayer{
 		voiceClient:     vc,
 		guildID:         vc.GuildID,
@@ -103,7 +93,6 @@ func newGuildPlayer(vc *discordgo.VoiceConnection, channelID string, fireStoreCl
 		voiceState:      notPlaying,
 		stopChannel:     make(chan bool),
 		fireStoreClient: fireStoreClient,
-		trackSearcher:   trackSearcher,
 	}
 }
 
@@ -157,16 +146,6 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.Config {
 // this will only return errors in non-404 case.
 func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error {
 	currentSong := g.getCurrentSong()
-
-	spotifyTrackID, err := g.trackSearcher.SearchTrack(currentSong.TrackName)
-	if err != nil {
-		return fmt.Errorf("searching for track: %w", err)
-	}
-
-	trackToAdd := likedTrack{
-		SpotifyTrackID: spotifyTrackID,
-	}
-
 	docRef, err := g.fireStoreClient.GetDocumentFromCollection(ctx, guildCollection, g.guildID).
 		Collection(userDataCollection).
 		Doc(userID).
@@ -174,8 +153,7 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			if _, err := docRef.Ref.Set(ctx, userData{
-				LikedTracks:    []likedTrack{trackToAdd},
-				SavedPlaylists: []audiotype.TrackData{},
+				LikedTracks: []*audiotype.TrackData{currentSong},
 			}); err != nil {
 				return fmt.Errorf("setting user data: %w", err)
 			}
@@ -189,7 +167,7 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 	if _, err := docRef.Ref.Update(ctx, []firestore.Update{
 		{
 			Path:  likedTracksPath,
-			Value: firestore.ArrayUnion(trackToAdd),
+			Value: firestore.ArrayUnion(currentSong),
 		},
 	}); err != nil {
 		return fmt.Errorf("updating document: %w", err)

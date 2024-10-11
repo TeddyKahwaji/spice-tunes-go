@@ -138,11 +138,13 @@ func (yt *SearchWrapper) handleSingleTrack(requesterName string, ID string) (*au
 		Query:         YoutubeVideoBase + ID,
 		Requester:     requesterName,
 		Duration:      duration,
+		ID:            ID,
 	})
 
 	return &audiotype.Data{
 		Tracks: trackData,
 		Type:   audiotype.YoutubeSong,
+		ID:     ID,
 	}, nil
 }
 
@@ -221,6 +223,7 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 			for _, item := range items {
 				data := &audiotype.TrackData{
 					Requester: requesterName,
+					ID:        ID,
 				}
 
 				videoID := item.Snippet.ResourceId.VideoId
@@ -282,6 +285,7 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 		Tracks:       trackData,
 		Type:         audiotype.YoutubePlaylist,
 		PlaylistData: playlistMetaData,
+		ID:           ID,
 	}, nil
 }
 

@@ -262,7 +262,7 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 		}
 
 		guildPlayerLogger := m.logger.With(logger.GuildID(interaction.GuildID))
-		m.guildVoiceStates[interaction.GuildID] = newGuildPlayer(channelVoiceConnection, interaction.ChannelID, m.fireStoreClient, m.spotifyClient, guildPlayerLogger)
+		m.guildVoiceStates[interaction.GuildID] = newGuildPlayer(channelVoiceConnection, interaction.ChannelID, m.fireStoreClient, guildPlayerLogger)
 	}
 
 	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{

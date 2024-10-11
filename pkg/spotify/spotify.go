@@ -24,13 +24,13 @@ func NewSpotifyClientWrapper(client *spotify.Client) *SpotifyClientWrapper {
 }
 
 func (s *SpotifyClientWrapper) GetRecommendation(ctx context.Context, query string, limit int) ([]*audiotype.TrackData, error) {
-	trackID, err := s.SearchTrack(query)
+	audioData, err := s.SearchTrack(query)
 	if err != nil {
 		return nil, fmt.Errorf("search track: %w", err)
 	}
 
 	seeds := spotify.Seeds{
-		Tracks: []spotify.ID{spotify.ID(trackID)},
+		Tracks: []spotify.ID{spotify.ID(audioData.ID)},
 	}
 
 	options := spotify.Options{Limit: &limit}
@@ -58,6 +58,7 @@ func (s *SpotifyClientWrapper) GetRecommendation(ctx context.Context, query stri
 	for _, track := range fullTracks {
 		trackTitle := track.Name + " - " + track.Artists[0].Name
 		trackData := &audiotype.TrackData{
+			ID:        track.ID.String(),
 			TrackName: trackTitle,
 			Query:     "ytsearch1:" + trackTitle,
 			Requester: requesterName,
@@ -75,17 +76,38 @@ func (s *SpotifyClientWrapper) GetRecommendation(ctx context.Context, query stri
 }
 
 // Search track returns a spotifyID if a matching song was found on spotify.
-func (s *SpotifyClientWrapper) SearchTrack(query string) (string, error) {
+func (s *SpotifyClientWrapper) SearchTrack(query string) (*audiotype.Data, error) {
 	result, err := s.client.Search(query, spotify.SearchTypeTrack)
 	if err != nil {
-		return "", fmt.Errorf("searching track: %w", err)
+		return nil, fmt.Errorf("searching track: %w", err)
 	}
 
 	if result.Tracks == nil || len(result.Tracks.Tracks) == 0 {
-		return "", audiotype.ErrSearchQueryNotFound
+		return nil, audiotype.ErrSearchQueryNotFound
 	}
 
-	return result.Tracks.Tracks[0].ID.String(), nil
+	track := result.Tracks.Tracks[0]
+
+	audioData := &audiotype.Data{
+		Type: audiotype.SpotifyTrack,
+		ID:   track.ID.String(),
+	}
+
+	fullTrackName := track.Name + " - " + track.Artists[0].Name
+	trackData := &audiotype.TrackData{
+		ID:        track.ID.String(),
+		TrackName: fullTrackName,
+		Duration:  track.TimeDuration(),
+		Query:     "ytsearch1:" + fullTrackName,
+	}
+
+	if len(track.Album.Images) > 0 {
+		trackData.TrackImageURL = track.Album.Images[0].URL
+	}
+
+	audioData.Tracks = []*audiotype.TrackData{trackData}
+
+	return audioData, nil
 }
 
 func (s *SpotifyClientWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
@@ -159,6 +181,7 @@ func (s *SpotifyClientWrapper) handleSingleTrackData(requesterName string, spoti
 	trackTitle := track.Name + " - " + track.Artists[0].Name
 	trackData = append(trackData, &audiotype.TrackData{
 		TrackName:     trackTitle,
+		ID:            track.ID.String(),
 		TrackImageURL: track.Album.Images[0].URL,
 		Query:         "ytsearch1:" + trackTitle,
 		Requester:     requesterName,
@@ -168,6 +191,7 @@ func (s *SpotifyClientWrapper) handleSingleTrackData(requesterName string, spoti
 	return &audiotype.Data{
 		Tracks: trackData,
 		Type:   audiotype.SpotifyTrack,
+		ID:     spotifyTrackID,
 	}, nil
 }
 
@@ -209,6 +233,7 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 					TrackImageURL: result.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
 					Requester:     requesterName,
+					ID:            track.ID.String(),
 					Duration:      track.TimeDuration(),
 				})
 			}
@@ -238,6 +263,7 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 		Tracks:       trackData,
 		Type:         audiotype.SpotifyAlbum,
 		PlaylistData: playlistData,
+		ID:           spotifyTrackID,
 	}, nil
 }
 
@@ -258,7 +284,7 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 	result, err := s.client.GetPlaylistTracksOpt(spotify.ID(spotifyTrackID), &spotify.Options{
 		Offset: &offset,
 		Limit:  &limit,
-	}, "items(track(name,href,album,artists,duration_ms(name,href,images))), next")
+	}, "items(track(name,href,album,id,artists,duration_ms(name,href,images))), next")
 	if err != nil {
 		return nil, fmt.Errorf("getting spotify playlist items: %w", err)
 	}
@@ -281,6 +307,7 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 					TrackImageURL: track.Track.Album.Images[0].URL,
 					Query:         "ytsearch1:" + fullTrackName,
 					Requester:     requesterName,
+					ID:            track.Track.ID.String(),
 					Duration:      track.Track.TimeDuration(),
 				})
 			}
@@ -311,6 +338,7 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 		Tracks:       trackData,
 		Type:         audiotype.SpotifyPlaylist,
 		PlaylistData: playlistData,
+		ID:           spotifyTrackID,
 	}, nil
 }
 
