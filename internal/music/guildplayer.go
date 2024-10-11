@@ -39,6 +39,10 @@ const (
 	likedTracksPath    string = "liked_tracks"
 )
 
+const (
+	paginationSeparator int = 8
+)
+
 var (
 	errStreamNonExistent = errors.New("no stream exists")
 	errNoViews           = errors.New("guild player does not have any views")
@@ -194,6 +198,16 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 	return nil
 }
 
+func (g *guildPlayer) getQueueViewConfig() (*pagination.PaginationConfig[audiotype.TrackData], error) {
+	if g.getCurrentPointer()+1 >= len(g.queue) {
+		return nil, errInvalidPosition
+	}
+
+	paginationConfig := pagination.NewPaginatedConfig(g.queue[g.getCurrentPointer()+1:], paginationSeparator)
+
+	return paginationConfig, nil
+}
+
 func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -203,8 +217,10 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 		return fmt.Errorf("getting guild: %w", err)
 	}
 
-	separator := 8
-	paginationConfig := pagination.NewPaginatedConfig(g.queue[g.getCurrentPointer()+1:], separator)
+	paginationConfig, err := g.getQueueViewConfig()
+	if err != nil {
+		return fmt.Errorf("getting queue view config: %w", err)
+	}
 
 	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
 		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
@@ -359,12 +375,31 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 	if len(g.views) == 0 {
 		return errNoViews
 	}
+	guild, err := util.GetGuild(session, g.guildID)
+	if err != nil {
+		return fmt.Errorf("getting guild: %w", err)
+	}
+
+	var skipQueueViews bool
 
 	musicViewConfig := g.getMusicPlayerViewConfig()
+
+	queueViewConfig, err := g.getQueueViewConfig()
+	if err != nil {
+		skipQueueViews = true
+	}
+
+	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
+		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
+	}
 	for _, guildView := range g.views {
 		if guildView.viewType == musicPlayer {
 			if err := guildView.view.EditView(musicViewConfig, session); err != nil {
-				return fmt.Errorf("editing view : %w", err)
+				g.logger.Warn("unable to refresh music player view", zap.Error(err))
+			}
+		} else if !skipQueueViews {
+			if err := guildView.view.EditView(*queueViewConfig.GetViewConfig(getQueueEmbed), session); err != nil {
+				g.logger.Warn("unable to refresh queue view", zap.Error(err))
 			}
 		}
 	}
