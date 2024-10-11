@@ -7,7 +7,7 @@ import (
 
 // GetPaginationEmbed is a function type used for embedding paginated data into a Discord embed.
 // It takes in paginated data, the current page number, and a separator (the number of items per page).
-type GetPaginationEmbed[T any] func(data []*T, pageNum int, separator int) *discordgo.MessageEmbed
+type GetPaginationEmbed[T any] func(data []*T, pageNum int, totalPages int, separator int) *discordgo.MessageEmbed
 
 // PaginationConfig is a generic struct that manages the configuration for paginating a set of data.
 // The Data field holds the full dataset, while the Separator specifies how many items should appear per page.
@@ -101,7 +101,7 @@ func (p *PaginationConfig[T]) GetPages() [][]*T {
 // GetBaseHandler returns a handler function that processes pagination button clicks.
 // It updates the current page number based on the button clicked (First, Back, Next, Last),
 // and calls the afterHandler to refresh the embed or perform additional logic.
-func (p *PaginationConfig[T]) GetBaseHandler(session *discordgo.Session, afterHandler views.Handler) views.Handler {
+func (p *PaginationConfig[T]) GetBaseHandler(_ *discordgo.Session, afterHandler views.Handler) views.Handler {
 	return func(passedInteraction *discordgo.Interaction) error {
 		// Determine which button was clicked based on its custom ID.
 		messageCustomID := passedInteraction.MessageComponentData().CustomID
@@ -136,7 +136,7 @@ func (p *PaginationConfig[T]) GetViewConfig(paginationEmbedRetriever GetPaginati
 	// Create embeds for each page using the provided paginationEmbedRetriever function.
 	paginationEmbeds := make([]*discordgo.MessageEmbed, 0, *p.totalPages)
 	for pageNum, pageData := range pages {
-		paginationEmbeds = append(paginationEmbeds, paginationEmbedRetriever(pageData, pageNum+1, p.Separator))
+		paginationEmbeds = append(paginationEmbeds, paginationEmbedRetriever(pageData, pageNum+1, len(pages), p.Separator))
 	}
 
 	// Determine which pagination buttons should be disabled based on the current page.

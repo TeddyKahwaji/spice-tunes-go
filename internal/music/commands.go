@@ -96,5 +96,12 @@ func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
 				Description: "Displays the music queue",
 			},
 		},
+		"spice": {
+			handler: m.spice,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "spice",
+				Description: "Add recommended songs to the queue based on the current song playing",
+			},
+		},
 	}
 }

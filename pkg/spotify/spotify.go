@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 
 	"github.com/zmb3/spotify"
 )
@@ -20,6 +21,57 @@ func NewSpotifyClientWrapper(client *spotify.Client) *SpotifyClientWrapper {
 	return &SpotifyClientWrapper{
 		client: client,
 	}
+}
+
+func (s *SpotifyClientWrapper) GetRecommendation(ctx context.Context, query string, limit int) ([]*audiotype.TrackData, error) {
+	trackID, err := s.SearchTrack(query)
+	if err != nil {
+		return nil, fmt.Errorf("search track: %w", err)
+	}
+
+	seeds := spotify.Seeds{
+		Tracks: []spotify.ID{spotify.ID(trackID)},
+	}
+
+	options := spotify.Options{Limit: &limit}
+	recommendations, err := s.client.GetRecommendations(seeds, nil, &options)
+	if err != nil {
+		return nil, fmt.Errorf("getting recommendations: %w", err)
+	}
+
+	if ctxData := ctx.Value("requesterName"); ctxData == nil {
+		return nil, errors.New("context does not have proper authorization")
+	}
+
+	requesterName := ctx.Value("requesterName").(string)
+
+	recommendationTrackIDs := funcs.Map(recommendations.Tracks, func(simpleTrack spotify.SimpleTrack) spotify.ID {
+		return simpleTrack.ID
+	})
+
+	fullTracks, err := s.client.GetTracks(recommendationTrackIDs...)
+	if err != nil {
+		return nil, fmt.Errorf("error getting full tracks: %w", err)
+	}
+
+	result := make([]*audiotype.TrackData, 0, len(recommendations.Tracks))
+	for _, track := range fullTracks {
+		trackTitle := track.Name + " - " + track.Artists[0].Name
+		trackData := &audiotype.TrackData{
+			TrackName: trackTitle,
+			Query:     "ytsearch1:" + trackTitle,
+			Requester: requesterName,
+			Duration:  track.TimeDuration(),
+		}
+
+		if len(track.Album.Images) > 0 {
+			trackData.TrackImageURL = track.Album.Images[0].URL
+		}
+
+		result = append(result, trackData)
+	}
+
+	return result, nil
 }
 
 // Search track returns a spotifyID if a matching song was found on spotify.
@@ -43,7 +95,7 @@ func (s *SpotifyClientWrapper) GetTracksData(ctx context.Context, audioType audi
 	)
 
 	if ctxData := ctx.Value("requesterName"); ctxData == nil {
-		return nil, errors.New("context must contain requesterName, otherwise not authorized to get track data")
+		return nil, errors.New("context does not have proper authorization")
 	}
 
 	requesterName := ctx.Value("requesterName").(string)

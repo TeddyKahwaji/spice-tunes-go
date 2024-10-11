@@ -222,8 +222,8 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 		return fmt.Errorf("getting queue view config: %w", err)
 	}
 
-	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
-		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
+	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, totalPages int, separator int) *discordgo.MessageEmbed {
+		return embeds.QueueEmbed(tracks, pageNumber, totalPages, separator, guild)
 	}
 
 	viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
@@ -390,8 +390,8 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 		skipQueueViews = true
 	}
 
-	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
-		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
+	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, totalPages int, separator int) *discordgo.MessageEmbed {
+		return embeds.QueueEmbed(tracks, pageNumber, separator, totalPages, guild)
 	}
 
 	for guildView := range g.views {

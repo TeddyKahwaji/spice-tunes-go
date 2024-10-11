@@ -177,7 +177,7 @@ func (m *playerCog) playAudio(guildPlayer *guildPlayer) error {
 
 	if guildPlayer.hasView() {
 		if err := guildPlayer.refreshState(m.session); err != nil {
-			m.logger.Warn("unable to refresh music view state", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
+			m.logger.Warn("unable to refresh views", zap.Error(err), zap.String("guild_id", guildPlayer.guildID))
 		}
 	}
 
@@ -715,7 +715,7 @@ func (m *playerCog) clear(session *discordgo.Session, interaction *discordgo.Int
 	guildPlayer.queue = guildPlayer.queue[:1]
 
 	if err := guildPlayer.refreshState(session); err != nil {
-		m.logger.Warn("unable to refresh music view state", zap.Error(err), logger.GuildID(guildPlayer.guildID))
+		m.logger.Warn("unable to refresh views", zap.Error(err), logger.GuildID(guildPlayer.guildID))
 	}
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
@@ -783,7 +783,7 @@ func (m *playerCog) swap(session *discordgo.Session, interaction *discordgo.Inte
 	newSecondTrack := guildPlayer.getTrackAtPosition(guildPlayer.getCurrentPointer() + secondPosition)
 
 	if err := guildPlayer.refreshState(session); err != nil {
-		m.logger.Warn("unable to refresh music view state", zap.Error(err), logger.GuildID(guildPlayer.guildID))
+		m.logger.Warn("unable to refresh views", zap.Error(err), logger.GuildID(guildPlayer.guildID))
 	}
 
 	if err := util.SendMessage(session, interaction.Interaction, false, util.MessageData{
@@ -791,6 +791,71 @@ func (m *playerCog) swap(session *discordgo.Session, interaction *discordgo.Inte
 		Embeds: embeds.TracksSwappedEmbed(interaction.Member, newSecondTrack, firstPosition, newFirstTrack, secondPosition),
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
+func (m *playerCog) spice(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.isQueueDepleted() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
+		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	}); err != nil {
+		return fmt.Errorf("deferring message: %w", err)
+	}
+
+	ctx := context.WithValue(context.Background(), "requesterName", interaction.Member.User.Username)
+	ctx, cancelFunc := context.WithTimeout(ctx, time.Second*5)
+
+	defer cancelFunc()
+
+	currentSongPlaying := guildPlayer.getCurrentSong().TrackName
+	recommendationLimit := 20
+
+	recommendations, err := m.spotifyClient.GetRecommendation(ctx, currentSongPlaying, recommendationLimit)
+	if err != nil {
+		return fmt.Errorf("getting recommendations: %w", err)
+	}
+	addedPosition := guildPlayer.remainingQueueLength() + 1
+	guildPlayer.addTracks(recommendations...)
+
+	if err := guildPlayer.refreshState(session); err != nil {
+		m.logger.Warn("unable to refresh views", zap.Error(err), logger.GuildID(guildPlayer.guildID))
+	}
+
+	spiceEmbed := embeds.SpiceEmbed(len(recommendations), addedPosition, interaction.Member)
+
+	if err := util.SendMessage(session, interaction.Interaction, true, util.MessageData{
+		Embeds: spiceEmbed,
+	}, util.WithDeletion(20*time.Second, interaction.ChannelID)); err != nil {
+		return fmt.Errorf("sending spice embed message: %w", err)
 	}
 
 	return nil
@@ -829,7 +894,7 @@ func (m *playerCog) resume(session *discordgo.Session, interaction *discordgo.In
 	}
 
 	if err := guildPlayer.refreshState(session); err != nil {
-		m.logger.Warn("unable to refresh music view state", zap.Error(err), logger.GuildID(guildPlayer.guildID))
+		m.logger.Warn("unable to refresh views", zap.Error(err), logger.GuildID(guildPlayer.guildID))
 	}
 
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
