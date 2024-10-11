@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
 	fb "firebase.google.com/go"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/firebase"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/gcp"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/music"
 	sw "github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
@@ -22,14 +22,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/clientcredentials"
 )
-
-func getLogger(env string) *zap.Logger {
-	if strings.ToUpper(env) == "PROD" {
-		return zap.Must(zap.NewProduction(zap.WithCaller(true)))
-	}
-
-	return zap.Must(zap.NewDevelopment())
-}
 
 func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Session, error) {
 	bot, err := discordgo.New("Bot " + token)
@@ -80,7 +72,7 @@ func main() {
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 
-	logger := getLogger(env)
+	logger := logger.NewLogger(env)
 	defer func() {
 		if err := logger.Sync(); err != nil {
 			logger.Warn("could not sync logger", zap.Error(err))
