@@ -119,7 +119,9 @@ func (p *PaginationConfig[T]) GetBaseHandler(session *discordgo.Session, afterHa
 		}
 
 		// Call the provided afterHandler to handle additional functionality, such as updating the UI.
-		afterHandler(passedInteraction)
+		if err := afterHandler(passedInteraction); err != nil {
+			return err
+		}
 
 		return nil
 	}

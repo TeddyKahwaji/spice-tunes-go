@@ -332,7 +332,7 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 			return fmt.Errorf("sending message: %w", err)
 		}
 	} else {
-		if err := guildPlayer.generateMusicPlayerView(interaction.Interaction, session, m.logger); err != nil {
+		if err := guildPlayer.generateMusicPlayerView(interaction.Interaction, session); err != nil {
 			m.logger.Error("unable to generate music player view", zap.Error(err), logger.GuildID(interaction.GuildID))
 		}
 	}
@@ -403,7 +403,7 @@ func (m *playerCog) queue(session *discordgo.Session, interaction *discordgo.Int
 		return fmt.Errorf("deferring message: %w", err)
 	}
 
-	if err := guildPlayer.generateMusicQueueView(interaction.Interaction, session, m.logger); err != nil {
+	if err := guildPlayer.generateMusicQueueView(interaction.Interaction, session); err != nil {
 		return fmt.Errorf("generating music queue view: %w", err)
 	}
 
@@ -759,9 +759,9 @@ func (m *playerCog) swap(session *discordgo.Session, interaction *discordgo.Inte
 
 	options := interaction.ApplicationCommandData().Options
 
-	firstPosition, secondPosition := int(options[0].IntValue())-1, int(options[1].IntValue())-1
+	firstPosition, secondPosition := int(options[0].IntValue()), int(options[1].IntValue())
 
-	if err := guildPlayer.swap(firstPosition, secondPosition); err != nil {
+	if err := guildPlayer.swap(guildPlayer.getCurrentPointer()+firstPosition, guildPlayer.getCurrentPointer()+secondPosition); err != nil {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("The positions you entered are incorrect, please check the queue and try again")
 		msgData := util.MessageData{
 			Embeds: invalidUsageEmbed,
@@ -779,8 +779,8 @@ func (m *playerCog) swap(session *discordgo.Session, interaction *discordgo.Inte
 		return nil
 	}
 
-	newFirstTrack := guildPlayer.getTrackAtPosition(firstPosition)
-	newSecondTrack := guildPlayer.getTrackAtPosition(secondPosition)
+	newFirstTrack := guildPlayer.getTrackAtPosition(guildPlayer.getCurrentPointer() + firstPosition)
+	newSecondTrack := guildPlayer.getTrackAtPosition(guildPlayer.getCurrentPointer() + secondPosition)
 
 	if err := guildPlayer.refreshState(session); err != nil {
 		m.logger.Warn("unable to refresh music view state", zap.Error(err), logger.GuildID(guildPlayer.guildID))

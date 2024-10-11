@@ -87,7 +87,7 @@ type guildPlayer struct {
 	stream          *dca.StreamingSession
 	doneChannel     chan error
 	stopChannel     chan bool
-	views           []*guildView
+	views           map[*guildView]struct{}
 	fireStoreClient FireStore
 	trackSearcher   TrackSearcher
 }
@@ -98,7 +98,7 @@ func newGuildPlayer(vc *discordgo.VoiceConnection, channelID string, fireStoreCl
 		guildID:         vc.GuildID,
 		channelID:       channelID,
 		queue:           []*audiotype.TrackData{},
-		views:           []*guildView{},
+		views:           make(map[*guildView]struct{}),
 		logger:          logger,
 		voiceState:      notPlaying,
 		stopChannel:     make(chan bool),
@@ -208,7 +208,7 @@ func (g *guildPlayer) getQueueViewConfig() (*pagination.PaginationConfig[audioty
 	return paginationConfig, nil
 }
 
-func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
+func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction, session *discordgo.Session) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -236,7 +236,6 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 			Components: &viewConfig.Components.MessageComponents,
 			Embeds:     &viewConfig.Embeds,
 		})
-
 		if err != nil {
 			return fmt.Errorf("editing complex message: %w", err)
 		}
@@ -252,27 +251,28 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 	// GetBaseHandler, will handle the button interactions while the passed handler will execute
 	// after updating button state
 	handler = paginationConfig.GetBaseHandler(session, handler)
-	queueView := views.NewView(*viewConfig, views.WithLogger(logger))
+	queueView := views.NewView(*viewConfig, views.WithLogger(g.logger), views.WithDeletion(5*time.Minute))
 
 	if err := queueView.SendView(interaction, session, handler); err != nil {
 		return fmt.Errorf("sending queue view: %w", err)
 	}
 
-	g.views = append(g.views, &guildView{
+	createdView := &guildView{
 		view:     queueView,
 		viewType: queue,
-	})
+	}
+	g.views[createdView] = struct{}{}
 
 	return nil
 }
 
-func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session, logger *zap.Logger) error {
+func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction, session *discordgo.Session) error {
 	if g.isQueueDepleted() {
 		return errEmptyQueue
 	}
 
 	viewConfig := g.getMusicPlayerViewConfig()
-	musicPlayerView := views.NewView(viewConfig, views.WithLogger(logger))
+	musicPlayerView := views.NewView(viewConfig, views.WithLogger(g.logger))
 
 	handler := func(passedInteraction *discordgo.Interaction) error {
 		var actionMessage string
@@ -363,10 +363,11 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		return fmt.Errorf("sending music player view: %w", err)
 	}
 
-	g.views = append(g.views, &guildView{
+	createdView := &guildView{
 		view:     musicPlayerView,
 		viewType: musicPlayer,
-	})
+	}
+	g.views[createdView] = struct{}{}
 
 	return nil
 }
@@ -392,14 +393,17 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, separator int) *discordgo.MessageEmbed {
 		return embeds.QueueEmbed(tracks, pageNumber, separator, guild)
 	}
-	for _, guildView := range g.views {
+
+	for guildView := range g.views {
 		if guildView.viewType == musicPlayer {
 			if err := guildView.view.EditView(musicViewConfig, session); err != nil {
 				g.logger.Warn("unable to refresh music player view", zap.Error(err))
+				delete(g.views, guildView)
 			}
 		} else if !skipQueueViews {
 			if err := guildView.view.EditView(*queueViewConfig.GetViewConfig(getQueueEmbed), session); err != nil {
 				g.logger.Warn("unable to refresh queue view", zap.Error(err))
+				delete(g.views, guildView)
 			}
 		}
 	}
@@ -412,13 +416,13 @@ func (g *guildPlayer) destroyAllViews(session *discordgo.Session) {
 		return
 	}
 
-	for _, guildView := range g.views {
+	for guildView := range g.views {
 		if err := guildView.view.DeleteView(session); err != nil {
 			g.logger.Warn("unable to delete view", zap.Error(err))
 		}
 	}
 
-	g.views = g.views[:0]
+	g.views = map[*guildView]struct{}{}
 }
 
 func (g *guildPlayer) getCurrentSong() *audiotype.TrackData {
@@ -466,7 +470,11 @@ func (g *guildPlayer) isBeforeQueuePtr(index int) bool {
 }
 
 func (g *guildPlayer) swap(firstPosition int, secondPosition int) error {
-	if !g.isValidPosition(firstPosition) || !g.isValidPosition(secondPosition) || g.isBeforeQueuePtr(firstPosition) || g.isBeforeQueuePtr(secondPosition) {
+	isInvalidPositions := !g.isValidPosition(firstPosition) || !g.isValidPosition(secondPosition)
+	isBeforeQueuePtr := g.isBeforeQueuePtr(firstPosition) || g.isBeforeQueuePtr(secondPosition)
+	isZeroIndex := firstPosition == 0 || secondPosition == 0 // 0 index is reserved for the track currently playing only, which cannot be swapped.
+
+	if isInvalidPositions || isBeforeQueuePtr || isZeroIndex {
 		return errInvalidPosition
 	}
 

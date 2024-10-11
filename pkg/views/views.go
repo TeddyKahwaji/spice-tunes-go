@@ -35,10 +35,10 @@ func WithLogger(logger *zap.Logger) ConfigOpts {
 	}
 }
 
-func WithDeletion(deletionTimer *time.Duration) ConfigOpts {
+func WithDeletion(deletionTimer time.Duration) ConfigOpts {
 	return func(v *Config) {
 		v.deletionEnabled = true
-		v.deletionTimer = *deletionTimer
+		v.deletionTimer = deletionTimer
 	}
 }
 

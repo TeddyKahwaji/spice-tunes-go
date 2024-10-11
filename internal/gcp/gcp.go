@@ -10,10 +10,10 @@ import (
 type Credentials struct {
 	ClientEmail  string `json:"client_email"   mapstructure:"clientEmail"   structs:"ClientEmail"`
 	ClientID     string `json:"client_id"      mapstructure:"clientID"      structs:"ClientID"`
-	PrivateKeyID string `json:"private_key_id" mapstructure:"privateKeyID" structs:"PrivateKeyID"`
+	PrivateKeyID string `json:"private_key_id" mapstructure:"privateKeyID"  structs:"PrivateKeyID"`
 	PrivateKey   string `json:"private_key"    mapstructure:"privateKey"    structs:"PrivateKey"`
 	ProjectID    string `json:"project_id"     mapstructure:"projectID"     structs:"ProjectID"`
-	Type         string `json:"type"           mapstructure:"type"           structs:"Type"`
+	Type         string `json:"type"           mapstructure:"type"          structs:"Type"`
 }
 
 func GetCredentials() ([]byte, error) {
