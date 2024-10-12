@@ -281,7 +281,7 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 
-	ctx := context.WithValue(context.Background(), "requesterName", interaction.Member.User.Username)
+	ctx := context.WithValue(context.Background(), audiotype.ContextKey("requesterName"), interaction.Member.User.Username)
 
 	var trackData *audiotype.Data
 	if audiotype.IsSpotify(audioType) {

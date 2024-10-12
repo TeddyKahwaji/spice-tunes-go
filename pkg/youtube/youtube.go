@@ -66,12 +66,12 @@ func (yt *SearchWrapper) GetTracksData(ctx context.Context, audioType audiotype.
 		trackData *audiotype.Data
 		err       error
 	)
+	const requesterNameKey = audiotype.ContextKey("requesterName")
 
-	if ctxData := ctx.Value("requesterName"); ctxData == nil {
-		return nil, errors.New("context must contain requesterName, otherwise not authorized to get track data")
+	requesterName, ok := ctx.Value(requesterNameKey).(string)
+	if !ok {
+		return nil, errors.New("context does not have proper authorization")
 	}
-
-	requesterName := ctx.Value("requesterName").(string)
 
 	if audioType == audiotype.GenericSearch {
 		if trackData, err = yt.handleGenericSearch(requesterName, query); err != nil {

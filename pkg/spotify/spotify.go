@@ -39,11 +39,12 @@ func (s *SpotifyClientWrapper) GetRecommendation(ctx context.Context, query stri
 		return nil, fmt.Errorf("getting recommendations: %w", err)
 	}
 
-	if ctxData := ctx.Value("requesterName"); ctxData == nil {
+	const requesterNameKey = audiotype.ContextKey("requesterName")
+
+	requesterName, ok := ctx.Value(requesterNameKey).(string)
+	if !ok {
 		return nil, errors.New("context does not have proper authorization")
 	}
-
-	requesterName := ctx.Value("requesterName").(string)
 
 	recommendationTrackIDs := funcs.Map(recommendations.Tracks, func(simpleTrack spotify.SimpleTrack) spotify.ID {
 		return simpleTrack.ID
@@ -116,11 +117,12 @@ func (s *SpotifyClientWrapper) GetTracksData(ctx context.Context, audioType audi
 		err    error
 	)
 
-	if ctxData := ctx.Value("requesterName"); ctxData == nil {
+	const requesterNameKey = audiotype.ContextKey("requesterName")
+
+	requesterName, ok := ctx.Value(requesterNameKey).(string)
+	if !ok {
 		return nil, errors.New("context does not have proper authorization")
 	}
-
-	requesterName := ctx.Value("requesterName").(string)
 
 	if audioType != audiotype.SpotifyPlaylist && audioType != audiotype.SpotifyTrack && audioType != audiotype.SpotifyAlbum {
 		return nil, errors.New("audio type provided is not from a spotify source")

@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-type SupportedAudioType string
+type (
+	SupportedAudioType string
+	ContextKey         string
+)
 
 type TrackData struct {
 	TrackName     string        `firestore:"track_name"`
