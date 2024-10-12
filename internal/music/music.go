@@ -310,6 +310,14 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 		return err
 	}
 
+	if err := m.addToQueue(session, interaction, trackData, guildPlayer); err != nil {
+		return fmt.Errorf("adding to queue: %w", err)
+	}
+
+	return nil
+}
+
+func (m *playerCog) addToQueue(session *discordgo.Session, interaction *discordgo.InteractionCreate, trackData *audiotype.Data, guildPlayer *guildPlayer) error {
 	addedPosition := guildPlayer.remainingQueueLength() + 1
 	guildPlayer.addTracks(trackData.Tracks...)
 
