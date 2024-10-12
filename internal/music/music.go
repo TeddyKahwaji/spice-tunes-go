@@ -281,7 +281,9 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 
 	guildPlayer := m.guildVoiceStates[interaction.GuildID]
 
-	ctx := context.WithValue(context.Background(), audiotype.ContextKey("requesterName"), interaction.Member.User.Username)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancelFunc()
+	ctx = context.WithValue(ctx, audiotype.ContextKey("requesterName"), interaction.Member.User.Username)
 
 	var trackData *audiotype.Data
 	if audiotype.IsSpotify(audioType) {
@@ -830,9 +832,9 @@ func (m *playerCog) spice(session *discordgo.Session, interaction *discordgo.Int
 		return fmt.Errorf("deferring message: %w", err)
 	}
 
-	ctx := context.WithValue(context.Background(), "requesterName", interaction.Member.User.Username)
-	ctx, cancelFunc := context.WithTimeout(ctx, time.Second*5)
+	ctx := context.WithValue(context.Background(), audiotype.ContextKey("requesterName"), interaction.Member.User.Username)
 
+	ctx, cancelFunc := context.WithTimeout(ctx, time.Second*5)
 	defer cancelFunc()
 
 	currentSongPlaying := guildPlayer.getCurrentSong().TrackName
