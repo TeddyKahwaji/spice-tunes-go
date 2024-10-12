@@ -176,7 +176,7 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 	return nil
 }
 
-func (g *guildPlayer) getQueueViewConfig() (*pagination.PaginationConfig[audiotype.TrackData], error) {
+func (g *guildPlayer) getQueuePaginationConfig() (*pagination.PaginationConfig[audiotype.TrackData], error) {
 	if g.getCurrentPointer()+1 >= len(g.queue) {
 		return nil, errInvalidPosition
 	}
@@ -195,7 +195,7 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 		return fmt.Errorf("getting guild: %w", err)
 	}
 
-	paginationConfig, err := g.getQueueViewConfig()
+	paginationConfig, err := g.getQueuePaginationConfig()
 	if err != nil {
 		return fmt.Errorf("getting queue view config: %w", err)
 	}
@@ -205,9 +205,11 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 	}
 
 	viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
+
 	handler := func(passedInteraction *discordgo.Interaction) error {
 		messageID := passedInteraction.Message.ID
 		viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
+
 		_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			ID:         messageID,
 			Channel:    passedInteraction.ChannelID,
@@ -354,18 +356,19 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 	if len(g.views) == 0 {
 		return errNoViews
 	}
+
 	guild, err := util.GetGuild(session, g.guildID)
 	if err != nil {
 		return fmt.Errorf("getting guild: %w", err)
 	}
 
-	var skipQueueViews bool
+	var deleteQueueView bool
 
 	musicViewConfig := g.getMusicPlayerViewConfig()
 
-	queueViewConfig, err := g.getQueueViewConfig()
+	queueViewConfig, err := g.getQueuePaginationConfig()
 	if err != nil {
-		skipQueueViews = true
+		deleteQueueView = true
 	}
 
 	getQueueEmbed := func(tracks []*audiotype.TrackData, pageNumber int, totalPages int, separator int) *discordgo.MessageEmbed {
@@ -378,8 +381,16 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 				g.logger.Warn("unable to refresh music player view", zap.Error(err))
 				delete(g.views, guildView)
 			}
-		} else if !skipQueueViews {
-			if err := guildView.view.EditView(*queueViewConfig.GetViewConfig(getQueueEmbed), session); err != nil {
+		} else {
+			if deleteQueueView {
+				_ = guildView.view.DeleteView(session)
+				delete(g.views, guildView)
+				continue
+			}
+
+			viewConfig := queueViewConfig.GetViewConfig(getQueueEmbed)
+
+			if err := guildView.view.EditView(*viewConfig, session); err != nil {
 				g.logger.Warn("unable to refresh queue view", zap.Error(err))
 				delete(g.views, guildView)
 			}
@@ -422,11 +433,11 @@ func (g *guildPlayer) isValidPosition(position int) bool {
 }
 
 // unlike resetQueue, this resets the queue to
-// only contain elements up to the queue ptr.
+// only contain the current track playing
 func (g *guildPlayer) clearUpcomingTracks() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.queue = g.queue[g.getCurrentPointer():1]
+	g.queue = g.queue[:1]
 	g.queuePtr.Store(0)
 }
 

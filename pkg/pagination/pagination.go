@@ -132,6 +132,10 @@ func (p *PaginationConfig[T]) GetBaseHandler(_ *discordgo.Session, afterHandler 
 func (p *PaginationConfig[T]) GetViewConfig(paginationEmbedRetriever GetPaginationEmbed[T]) *views.Config {
 	// Split the data into pages.
 	pages := p.GetPages()
+	if len(pages) == 0 {
+		// TODO: Add error
+		return nil
+	}
 
 	// Create embeds for each page using the provided paginationEmbedRetriever function.
 	paginationEmbeds := make([]*discordgo.MessageEmbed, 0, *p.totalPages)

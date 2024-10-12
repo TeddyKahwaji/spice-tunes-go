@@ -476,11 +476,10 @@ func (m *playerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.V
 		channelMemberCount, err := util.GetVoiceChannelMemberCount(session, vc.BeforeUpdate.GuildID, vc.BeforeUpdate.ChannelID)
 		if err != nil {
 			m.logger.Error("error getting channel member count", zap.Error(err), logger.ChannelID(vc.BeforeUpdate.ChannelID))
-
 			return
 		}
 
-		if channelMemberCount <= 1 {
+		if channelMemberCount == 0 {
 			if botVoiceConnection, ok := session.VoiceConnections[vc.GuildID]; ok && botVoiceConnection.ChannelID == vc.BeforeUpdate.ChannelID {
 				if err := botVoiceConnection.Disconnect(); err != nil {
 					m.logger.Error("error disconnecting from channel", zap.Error(err))
@@ -712,7 +711,7 @@ func (m *playerCog) clear(session *discordgo.Session, interaction *discordgo.Int
 		return nil
 	}
 
-	guildPlayer.queue = guildPlayer.queue[:1]
+	guildPlayer.clearUpcomingTracks()
 
 	if err := guildPlayer.refreshState(session); err != nil {
 		m.logger.Warn("unable to refresh views", zap.Error(err), logger.GuildID(guildPlayer.guildID))
