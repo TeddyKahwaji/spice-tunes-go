@@ -3,8 +3,11 @@ package embeds
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -13,6 +16,7 @@ const (
 	Brown     int = 0x992D22
 	Blurple   int = 0x5865F2
 	Purple    int = 0xd333ff
+	DarkRed   int = 0x992D22
 )
 
 type Gif string
@@ -243,4 +247,41 @@ func UnexpectedErrorEmbed() *discordgo.MessageEmbed {
 			URL: noddingHead.String(),
 		},
 	}
+}
+
+func ErrorLogEmbed(command *discordgo.ApplicationCommand, guild *discordgo.Guild, options []*discordgo.ApplicationCommandInteractionDataOption, err error) *discordgo.MessageEmbed {
+	errorLogEmbed := &discordgo.MessageEmbed{
+		Title:     fmt.Sprintf("Command %s failed", command.Name),
+		Color:     DarkRed,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Error: ",
+				Value:  fmt.Sprintf("`%s`", err.Error()),
+				Inline: true,
+			},
+			{
+				Name:   "Guild ID: ",
+				Value:  fmt.Sprintf("`%s`", guild.ID),
+				Inline: true,
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: guild.IconURL(""),
+		},
+	}
+
+	if len(options) > 0 {
+		commandInputs := funcs.Map[*discordgo.ApplicationCommandInteractionDataOption, string](options, func(options *discordgo.ApplicationCommandInteractionDataOption) string {
+			return fmt.Sprintf("%s: %v", options.Name, options.Value)
+		})
+
+		formattedCommandInputs := strings.Join(commandInputs, ",")
+		errorLogEmbed.Fields = append(errorLogEmbed.Fields, &discordgo.MessageEmbedField{
+			Name:  "Command Inputs",
+			Value: fmt.Sprintf("`%s`", formattedCommandInputs),
+		})
+	}
+
+	return errorLogEmbed
 }

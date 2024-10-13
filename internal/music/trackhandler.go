@@ -27,6 +27,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	supportErrorLogChannel string = "1094732412845576266"
+)
+
 type FireStore interface {
 	CreateDocument(ctx context.Context, collection string, document string, data interface{}) error
 	DeleteDocument(ctx context.Context, collection string, document string) error
@@ -359,4 +363,154 @@ func (m *playerCog) retrieveTracks(ctx context.Context, audioType audiotype.Supp
 	}
 
 	return trackData, nil
+}
+
+func (m *playerCog) reportErrorToSupportChannel(session *discordgo.Session, interaction *discordgo.InteractionCreate, command *discordgo.ApplicationCommand, errCommand error) error {
+	guild, err := session.Guild(interaction.GuildID)
+	if err != nil {
+		return fmt.Errorf("getting guild: %w", err)
+	}
+
+	if _, err := session.ChannelMessageSendEmbed(supportErrorLogChannel, embeds.ErrorLogEmbed(command, guild,
+		interaction.ApplicationCommandData().Options, errCommand)); err != nil {
+		return fmt.Errorf("sending message to support channel: %w", err)
+	}
+
+	return nil
+}
+
+func (m *playerCog) commandHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
+	if interaction.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	commandMapping := m.getApplicationCommands()
+	if command, ok := commandMapping[interaction.ApplicationCommandData().Name]; ok {
+		if err := command.handler(session, interaction); err != nil {
+			if err := m.reportErrorToSupportChannel(session, interaction, command.commandConfiguration, err); err != nil {
+				m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
+			}
+
+			m.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", interaction.ApplicationCommandData().Name))
+			message, err := session.ChannelMessageSendEmbed(interaction.ChannelID, embeds.UnexpectedErrorEmbed())
+			if err != nil {
+				m.logger.Warn("failed to send unexpected error message", zap.Error(err))
+			}
+
+			_ = util.DeleteMessageAfterTime(session, interaction.ChannelID, message.ID, 30*time.Second)
+
+		}
+	}
+}
+
+func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
+	return map[string]*applicationCommand{
+		"play": {
+			handler: m.play,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "play",
+				Description: "Plays desired song/playlist",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:        "query",
+						Description: "Song/playlist search query",
+						Type:        discordgo.ApplicationCommandOptionString,
+						Required:    true,
+					},
+				},
+			},
+		},
+		"play-likes": {
+			handler: m.playLikes,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "play-likes",
+				Description: "Plays songs from a member's liked tracks",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:        "member",
+						Description: "A member from your server",
+						Type:        discordgo.ApplicationCommandOptionUser,
+						Required:    true,
+					},
+				},
+			},
+		},
+		"pause": {
+			handler: m.pause,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "pause",
+				Description: "Pauses the current track playing",
+			},
+		},
+		"resume": {
+			handler: m.resume,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "resume",
+				Description: "Resume the current track",
+			},
+		},
+		"skip": {
+			handler: m.skip,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "skip",
+				Description: "Skips the current track playing",
+			},
+		},
+		"rewind": {
+			handler: m.rewind,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "rewind",
+				Description: "Rewinds to the previous track in the queue",
+			},
+		},
+		"swap": {
+			handler: m.swap,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "swap",
+				Description: "Swap the position of two tracks in the queue",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:        "first_position",
+						Description: "The position of the first track in the queue",
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Required:    true,
+					},
+					{
+						Name:        "second_position",
+						Description: "The position of the second track in the queue",
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Required:    true,
+					},
+				},
+			},
+		},
+		"shuffle": {
+			handler: m.shuffle,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "shuffle",
+				Description: "Shuffles the music queue",
+			},
+		},
+		"clear": {
+			handler: m.clear,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "clear",
+				Description: "Clears the entire music queue",
+			},
+		},
+		"queue": {
+			handler: m.queue,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "queue",
+				Description: "Displays the music queue",
+			},
+		},
+		"spice": {
+			handler: m.spice,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "spice",
+				Description: "Add recommended songs to the queue based on the current song playing",
+			},
+		},
+	}
 }
