@@ -154,6 +154,10 @@ func (p *PaginationConfig[T]) GetViewConfig(paginationEmbedRetriever GetPaginati
 	// Generate the pagination buttons using the buttonsConfig.
 	paginationButtons := GetPaginationListButtons(buttonsConfig)
 
+	if *p.pageNum-1 >= len(pages) {
+		*p.pageNum = 1
+	}
+
 	// Return a new ViewConfig with the current page's embed and the corresponding buttons.
 	return &views.Config{
 		Components: &views.ComponentHandler{
