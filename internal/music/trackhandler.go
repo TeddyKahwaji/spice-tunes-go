@@ -335,7 +335,7 @@ func (m *playerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.V
 			return
 		}
 
-		if channelMemberCount == 0 {
+		if channelMemberCount == 1 {
 			if botVoiceConnection, ok := session.VoiceConnections[vc.GuildID]; ok && botVoiceConnection.ChannelID == vc.BeforeUpdate.ChannelID {
 				if err := botVoiceConnection.Disconnect(); err != nil {
 					m.logger.Error("error disconnecting from channel", zap.Error(err))

@@ -39,11 +39,7 @@ func GetVoiceChannelMemberCount(session *discordgo.Session, guildID, channelID s
 
 	for _, voiceState := range guild.VoiceStates {
 		if voiceState.ChannelID == channelID {
-			voiceChannel, err := session.Channel(channelID)
-			if err != nil {
-				return 0, fmt.Errorf("getting voice channel: %w", err)
-			}
-			return voiceChannel.MemberCount, nil
+			memberCount++
 		}
 	}
 
