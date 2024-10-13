@@ -60,13 +60,13 @@ type View struct {
 type Handler func(*discordgo.Interaction) error
 
 // NewView creates and returns a new View with the given configuration and optional configuration options.
-func NewView(Config Config, opts ...ConfigOpts) *View {
+func NewView(config Config, opts ...ConfigOpts) *View {
 	for _, opt := range opts {
-		opt(&Config) // Apply the functional options to modify the Config.
+		opt(&config) // Apply the functional options to modify the Config.
 	}
 
 	return &View{
-		Config: Config,
+		Config: config,
 	}
 }
 

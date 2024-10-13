@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
-
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -44,6 +43,17 @@ func NotFoundEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Search Query Has No Results",
 		Description: "Sorry, I couldn't find any results for your search.\n\nPlease provide a direct `YouTube` or `Spotify` link.",
+		Color:       LightPink,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: notFound.String(),
+		},
+	}
+}
+
+func NoLikedTracksFound(member *discordgo.User) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       member.Username + " Has No Liked Tracks",
+		Description: "This member hasn't liked any tracks in this server.",
 		Color:       LightPink,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: notFound.String(),

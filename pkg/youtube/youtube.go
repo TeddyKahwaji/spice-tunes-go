@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
-
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"

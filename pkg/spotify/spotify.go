@@ -9,7 +9,6 @@ import (
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
-
 	"github.com/zmb3/spotify"
 )
 

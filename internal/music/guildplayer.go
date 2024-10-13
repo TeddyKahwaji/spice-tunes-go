@@ -11,18 +11,16 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/pagination"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/views"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type voiceState string
@@ -45,6 +43,7 @@ const (
 
 var (
 	errStreamNonExistent = errors.New("no stream exists")
+	errUserHasNoLikes    = errors.New("user has no likes")
 	errNoViews           = errors.New("guild player does not have any views")
 	errEmptyQueue        = errors.New("queue is empty")
 	errInvalidPosition   = errors.New("position provided is out of bounds")
@@ -350,6 +349,26 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 	g.views[createdView] = struct{}{}
 
 	return nil
+}
+
+func (g *guildPlayer) getLikes(ctx context.Context, userID string) ([]*audiotype.TrackData, error) {
+	docRef, err := g.fireStoreClient.GetDocumentFromCollection(ctx, guildCollection, g.guildID).
+		Collection(userDataCollection).
+		Doc(userID).
+		Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, errUserHasNoLikes
+		}
+		return nil, fmt.Errorf("getting document: %w", err)
+	}
+
+	var userData userData
+	if err := docRef.DataTo(&userData); err != nil {
+		return nil, fmt.Errorf("converting data to userData struct: %w", err)
+	}
+
+	return userData.LikedTracks, nil
 }
 
 func (g *guildPlayer) refreshState(session *discordgo.Session) error {

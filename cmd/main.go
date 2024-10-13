@@ -15,12 +15,11 @@ import (
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/music"
 	sw "github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
-	"google.golang.org/api/option"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/zmb3/spotify"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/clientcredentials"
+	"google.golang.org/api/option"
 )
 
 func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Session, error) {
