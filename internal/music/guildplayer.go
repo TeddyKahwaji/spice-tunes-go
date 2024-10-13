@@ -256,7 +256,6 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 	handler := func(passedInteraction *discordgo.Interaction) error {
 		var actionMessage string
 		eg, ctx := errgroup.WithContext(context.Background())
-
 		messageID := passedInteraction.Message.ID
 		messageCustomID := passedInteraction.MessageComponentData().CustomID
 
@@ -303,6 +302,11 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		if err != nil {
 			return fmt.Errorf("editing complex message: %w", err)
 		}
+
+		eg.Go(func() error {
+			return g.refreshState(session)
+		})
+
 		if err := session.InteractionRespond(passedInteraction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 		}); err != nil {
@@ -346,6 +350,7 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		view:     musicPlayerView,
 		viewType: musicPlayer,
 	}
+
 	g.views[createdView] = struct{}{}
 
 	return nil

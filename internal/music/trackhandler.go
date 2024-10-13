@@ -385,13 +385,15 @@ func (m *playerCog) commandHandler(session *discordgo.Session, interaction *disc
 	}
 
 	commandMapping := m.getApplicationCommands()
-	if command, ok := commandMapping[interaction.ApplicationCommandData().Name]; ok {
+	commandName := interaction.ApplicationCommandData().Name
+
+	if command, ok := commandMapping[commandName]; ok {
 		if err := command.handler(session, interaction); err != nil {
 			if err := m.reportErrorToSupportChannel(session, interaction, command.commandConfiguration, err); err != nil {
 				m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
 			}
 
-			m.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", interaction.ApplicationCommandData().Name))
+			m.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", commandName))
 			message, err := session.ChannelMessageSendEmbed(interaction.ChannelID, embeds.UnexpectedErrorEmbed())
 			if err != nil {
 				m.logger.Warn("failed to send unexpected error message", zap.Error(err))
@@ -510,6 +512,13 @@ func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
 			commandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "spice",
 				Description: "Add recommended songs to the queue based on the current song playing",
+			},
+		},
+		"playerview": {
+			handler: m.playerview,
+			commandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "playerview",
+				Description: "Displays the current music player interface",
 			},
 		},
 	}

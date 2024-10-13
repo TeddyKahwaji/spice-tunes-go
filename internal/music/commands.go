@@ -644,3 +644,45 @@ func (m *playerCog) resume(session *discordgo.Session, interaction *discordgo.In
 
 	return nil
 }
+
+func (m *playerCog) playerview(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.isQueueDepleted() {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("Nothing is playing in this server")
+		msgData := util.MessageData{
+			Embeds: invalidUsageEmbed,
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	}); err != nil {
+		return fmt.Errorf("deferring message: %w", err)
+	}
+
+	if err := guildPlayer.generateMusicPlayerView(interaction.Interaction, session); err != nil {
+		return fmt.Errorf("generating music player view: %w", err)
+	}
+
+	return nil
+}
