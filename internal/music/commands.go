@@ -4,24 +4,78 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	fs "cloud.google.com/go/firestore"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 )
 
-type applicationCommandHandler func(*discordgo.Session, *discordgo.InteractionCreate) error
-
-type applicationCommand struct {
-	commandConfiguration *discordgo.ApplicationCommand
-	handler              applicationCommandHandler
+type FireStore interface {
+	CreateDocument(ctx context.Context, collection string, document string, data interface{}) error
+	DeleteDocument(ctx context.Context, collection string, document string) error
+	GetDocumentFromCollection(ctx context.Context, collection string, document string) *fs.DocumentRef
+	UpdateDocument(ctx context.Context, collection string, document string, data map[string]interface{}) error
 }
 
-func (m *playerCog) playLikes(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+type TrackDataRetriever interface {
+	GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
+}
+
+type PlayerCog struct {
+	fireStoreClient  FireStore
+	session          *discordgo.Session
+	httpClient       *http.Client
+	logger           *zap.Logger
+	songSignal       chan *guildPlayer
+	guildVoiceStates map[string]*guildPlayer
+	spotifyClient    *spotify.SpotifyClientWrapper
+	ytSearchWrapper  *youtube.SearchWrapper
+}
+
+type CogConfig struct {
+	FireStoreClient      FireStore
+	Session              *discordgo.Session
+	Logger               *zap.Logger
+	HTTPClient           *http.Client
+	SpotifyWrapper       *spotify.SpotifyClientWrapper
+	YoutubeSearchWrapper *youtube.SearchWrapper
+}
+
+func NewPlayerCog(config *CogConfig) (*PlayerCog, error) {
+	if config.Logger == nil ||
+		config.HTTPClient == nil ||
+		config.SpotifyWrapper == nil ||
+		config.YoutubeSearchWrapper == nil ||
+		config.Session == nil ||
+		config.FireStoreClient == nil {
+		return nil, errors.New("config was populated with nil value")
+	}
+
+	musicCog := &PlayerCog{
+		fireStoreClient:  config.FireStoreClient,
+		session:          config.Session,
+		httpClient:       config.HTTPClient,
+		logger:           config.Logger,
+		songSignal:       make(chan *guildPlayer),
+		guildVoiceStates: make(map[string]*guildPlayer),
+		spotifyClient:    config.SpotifyWrapper,
+		ytSearchWrapper:  config.YoutubeSearchWrapper,
+	}
+
+	go musicCog.globalPlay()
+
+	return musicCog, nil
+}
+
+func (m *PlayerCog) playLikes(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying in voice channel: %w", err)
@@ -85,7 +139,7 @@ func (m *playerCog) playLikes(session *discordgo.Session, interaction *discordgo
 	return nil
 }
 
-func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) play(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying in voice channel: %w", err)
@@ -151,7 +205,7 @@ func (m *playerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 	return nil
 }
 
-func (m *playerCog) queue(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) queue(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying in voice channel: %w", err)
@@ -193,7 +247,7 @@ func (m *playerCog) queue(session *discordgo.Session, interaction *discordgo.Int
 	return nil
 }
 
-func (m *playerCog) skip(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) skip(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying in voice channel: %w", err)
@@ -244,7 +298,7 @@ func (m *playerCog) skip(session *discordgo.Session, interaction *discordgo.Inte
 	return nil
 }
 
-func (m *playerCog) pause(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) pause(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying in voice channel: %w", err)
@@ -311,7 +365,7 @@ func (m *playerCog) pause(session *discordgo.Session, interaction *discordgo.Int
 	return nil
 }
 
-func (m *playerCog) rewind(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) rewind(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying in channel: %w", err)
@@ -376,7 +430,7 @@ func (m *playerCog) rewind(session *discordgo.Session, interaction *discordgo.In
 	return nil
 }
 
-func (m *playerCog) shuffle(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) shuffle(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying user is in voice channel: %w", err)
@@ -421,7 +475,7 @@ func (m *playerCog) shuffle(session *discordgo.Session, interaction *discordgo.I
 	return nil
 }
 
-func (m *playerCog) clear(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) clear(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying user is in voice channel: %w", err)
@@ -466,7 +520,7 @@ func (m *playerCog) clear(session *discordgo.Session, interaction *discordgo.Int
 	return nil
 }
 
-func (m *playerCog) swap(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) swap(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying user is in voice channel: %w", err)
@@ -534,7 +588,7 @@ func (m *playerCog) swap(session *discordgo.Session, interaction *discordgo.Inte
 	return nil
 }
 
-func (m *playerCog) spice(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) spice(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying user is in voice channel: %w", err)
@@ -599,7 +653,7 @@ func (m *playerCog) spice(session *discordgo.Session, interaction *discordgo.Int
 	return nil
 }
 
-func (m *playerCog) resume(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) resume(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying user is in voice channel: %w", err)
@@ -645,7 +699,7 @@ func (m *playerCog) resume(session *discordgo.Session, interaction *discordgo.In
 	return nil
 }
 
-func (m *playerCog) playerview(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) playerview(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
 	if err != nil {
 		return fmt.Errorf("verifying user is in voice channel: %w", err)

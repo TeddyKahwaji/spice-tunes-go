@@ -17,6 +17,8 @@ const (
 	Blurple   int = 0x5865F2
 	Purple    int = 0xd333ff
 	DarkRed   int = 0x992D22
+	DarkGreen int = 0x1F8B4C
+	PitchDark int = 0x020B03
 )
 
 type Gif string
@@ -40,6 +42,30 @@ func ErrorMessageEmbed(msg string) *discordgo.MessageEmbed {
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: shakingHeadNo.String(),
 		},
+	}
+}
+
+func GuildAuditEmbed(guild *discordgo.Guild, joined bool) *discordgo.MessageEmbed {
+	title := guild.Name + "  has kicked me from their discord 😥"
+	color := PitchDark
+	if joined {
+		title = guild.Name + " has added me to their server! 🤗"
+		color = DarkGreen
+	}
+
+	return &discordgo.MessageEmbed{
+		Title: title,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:  "Guild ID: ",
+				Value: fmt.Sprintf("`%s`", guild.ID),
+			},
+		},
+		Color: color,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: guild.IconURL(""),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 }
 

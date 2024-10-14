@@ -9,6 +9,7 @@ import (
 	"time"
 
 	fb "firebase.google.com/go"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/audit"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/firebase"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/gcp"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
@@ -20,6 +21,15 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/clientcredentials"
 	"google.golang.org/api/option"
+)
+
+type Cog interface {
+	RegisterCommands(*discordgo.Session)
+}
+
+var (
+	_ Cog = (*music.PlayerCog)(nil)
+	_ Cog = (*audit.AuditCog)(nil)
 )
 
 func newDiscordBotClient(token string, httpClient *http.Client) (*discordgo.Session, error) {
@@ -118,23 +128,30 @@ func main() {
 			logger.Fatal("unable to instantiate firebase client", zap.Error(err))
 		}
 
-		musicCogConfig := &music.CogConfig{
+		musicPlayerCog, err := music.NewPlayerCog(&music.CogConfig{
 			FireStoreClient:      firebaseClient,
 			Session:              session,
 			HTTPClient:           &httpClient,
 			SpotifyWrapper:       spotifyWrapper,
 			Logger:               logger,
 			YoutubeSearchWrapper: youtubeSearchWrapper,
-		}
-
-		musicPlayerCog, err := music.NewPlayerCog(musicCogConfig)
+		})
 		if err != nil {
-			logger.Fatal("unable to instantiate greeter cog", zap.Error(err))
+			logger.Fatal("unable to instantiate music cog", zap.Error(err))
 		}
 
-		if err = musicPlayerCog.RegisterCommands(session); err != nil {
-			logger.Fatal("unable to register greeter commands", zap.Error(err))
+		musicPlayerCog.RegisterCommands(session)
+
+		auditCog, err := audit.NewAuditCog(&audit.CogConfig{
+			Session:    session,
+			Logger:     logger,
+			HTTPClient: &httpClient,
+		})
+		if err != nil {
+			logger.Fatal("unable to instantiate audit cog", zap.Error(err))
 		}
+
+		auditCog.RegisterCommands(session)
 
 		logger.Info("Bot has connected")
 	})

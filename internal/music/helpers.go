@@ -6,109 +6,25 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"net/http"
 	"os"
 	"os/exec"
 	"slices"
 	"strings"
 	"time"
 
-	fs "cloud.google.com/go/firestore"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/goutubedl"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/commands"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
-	"github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
-	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 	"go.uber.org/zap"
 )
 
-const (
-	supportErrorLogChannel string = "1094732412845576266"
-)
-
-type FireStore interface {
-	CreateDocument(ctx context.Context, collection string, document string, data interface{}) error
-	DeleteDocument(ctx context.Context, collection string, document string) error
-	GetDocumentFromCollection(ctx context.Context, collection string, document string) *fs.DocumentRef
-	UpdateDocument(ctx context.Context, collection string, document string, data map[string]interface{}) error
-}
-
-type TrackDataRetriever interface {
-	GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error)
-}
-
-type playerCog struct {
-	fireStoreClient  FireStore
-	session          *discordgo.Session
-	httpClient       *http.Client
-	logger           *zap.Logger
-	songSignal       chan *guildPlayer
-	guildVoiceStates map[string]*guildPlayer
-	spotifyClient    *spotify.SpotifyClientWrapper
-	ytSearchWrapper  *youtube.SearchWrapper
-}
-
-type CogConfig struct {
-	FireStoreClient      FireStore
-	Session              *discordgo.Session
-	Logger               *zap.Logger
-	HTTPClient           *http.Client
-	SpotifyWrapper       *spotify.SpotifyClientWrapper
-	YoutubeSearchWrapper *youtube.SearchWrapper
-}
-
-func NewPlayerCog(config *CogConfig) (*playerCog, error) {
-	if config.Logger == nil ||
-		config.HTTPClient == nil ||
-		config.SpotifyWrapper == nil ||
-		config.YoutubeSearchWrapper == nil ||
-		config.Session == nil ||
-		config.FireStoreClient == nil {
-		return nil, errors.New("config was populated with nil value")
-	}
-
-	musicCog := &playerCog{
-		fireStoreClient:  config.FireStoreClient,
-		session:          config.Session,
-		httpClient:       config.HTTPClient,
-		logger:           config.Logger,
-		songSignal:       make(chan *guildPlayer),
-		guildVoiceStates: make(map[string]*guildPlayer),
-		spotifyClient:    config.SpotifyWrapper,
-		ytSearchWrapper:  config.YoutubeSearchWrapper,
-	}
-
-	go musicCog.globalPlay()
-
-	return musicCog, nil
-}
-
-// this function is called when instantiating the music cog
-func (m *playerCog) RegisterCommands(session *discordgo.Session) error {
-	commandMapping := slices.Collect(maps.Values(m.getApplicationCommands()))
-	commandsToRegister := funcs.Map(commandMapping, func(ac *applicationCommand) *discordgo.ApplicationCommand {
-		return ac.commandConfiguration
-	})
-
-	if _, err := session.ApplicationCommandBulkOverwrite(session.State.Application.ID, "", commandsToRegister); err != nil {
-		return fmt.Errorf("bulk overwriting commands: %w", err)
-	}
-
-	// This handler will delegate all commands to their respective handler.
-	session.AddHandler(m.commandHandler)
-	// Handler for when members join or leave a voice channel.
-	session.AddHandler(m.voiceStateUpdate)
-	// Handler for when bot is kicked out of a guild.
-	session.AddHandler(m.guildAddOrRemove)
-	return nil
-}
-
-func (m *playerCog) globalPlay() {
+func (m *PlayerCog) globalPlay() {
 	for gp := range m.songSignal {
 		go func() {
 			defer func() {
@@ -124,7 +40,7 @@ func (m *playerCog) globalPlay() {
 	}
 }
 
-func (m *playerCog) joinAndCreateGuildPlayer(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+func (m *PlayerCog) joinAndCreateGuildPlayer(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	voiceState, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 	if err != nil {
 		return fmt.Errorf("getting voice state: %w", err)
@@ -143,7 +59,7 @@ func (m *playerCog) joinAndCreateGuildPlayer(session *discordgo.Session, interac
 	return nil
 }
 
-func (m *playerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
+func (m *PlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
 	userName := "oauth"
 	password := ""
 
@@ -189,7 +105,7 @@ func (m *playerCog) downloadTrack(ctx context.Context, audioTrackName string) (*
 	return file, nil
 }
 
-func (m *playerCog) playAudio(guildPlayer *guildPlayer) error {
+func (m *PlayerCog) playAudio(guildPlayer *guildPlayer) error {
 	// exit if no voice client or no tracks in the queue
 	if guildPlayer == nil || guildPlayer.voiceClient == nil || guildPlayer.isQueueDepleted() {
 		return nil
@@ -260,7 +176,7 @@ func (m *playerCog) playAudio(guildPlayer *guildPlayer) error {
 	}
 }
 
-func (m *playerCog) addToQueue(session *discordgo.Session, interaction *discordgo.InteractionCreate, trackData *audiotype.Data, guildPlayer *guildPlayer) error {
+func (m *PlayerCog) addToQueue(session *discordgo.Session, interaction *discordgo.InteractionCreate, trackData *audiotype.Data, guildPlayer *guildPlayer) error {
 	addedPosition := guildPlayer.remainingQueueLength() + 1
 	guildPlayer.addTracks(trackData.Tracks...)
 
@@ -294,7 +210,7 @@ func (m *playerCog) addToQueue(session *discordgo.Session, interaction *discordg
 }
 
 // Helper function to throw error for commands requiring user to be in voice channel
-func (m *playerCog) verifyInChannelAndSendError(session *discordgo.Session, interaction *discordgo.InteractionCreate) (bool, error) {
+func (m *PlayerCog) verifyInChannelAndSendError(session *discordgo.Session, interaction *discordgo.InteractionCreate) (bool, error) {
 	_, err := session.State.VoiceState(interaction.GuildID, interaction.Member.User.ID)
 	if err != nil {
 		if errors.Is(err, discordgo.ErrStateNotFound) {
@@ -321,51 +237,7 @@ func (m *playerCog) verifyInChannelAndSendError(session *discordgo.Session, inte
 	return true, nil
 }
 
-func (m *playerCog) guildAddOrRemove(_ *discordgo.Session, guildDeleteEvent *discordgo.GuildDelete) {
-	delete(m.guildVoiceStates, guildDeleteEvent.ID)
-	m.logger.Info("bot has been kicked from guild", logger.GuildID(guildDeleteEvent.ID))
-}
-
-func (m *playerCog) voiceStateUpdate(session *discordgo.Session, vc *discordgo.VoiceStateUpdate) {
-	if vc == nil || session == nil {
-		return
-	}
-
-	hasLeft := vc.BeforeUpdate != nil && !vc.Member.User.Bot && vc.ChannelID == ""
-	if hasLeft {
-		channelMemberCount, err := util.GetVoiceChannelMemberCount(session, vc.BeforeUpdate.GuildID, vc.BeforeUpdate.ChannelID)
-		if err != nil {
-			m.logger.Error("error getting channel member count", zap.Error(err), logger.ChannelID(vc.BeforeUpdate.ChannelID))
-			return
-		}
-
-		if channelMemberCount == 1 {
-			if botVoiceConnection, ok := session.VoiceConnections[vc.GuildID]; ok && botVoiceConnection.ChannelID == vc.BeforeUpdate.ChannelID {
-				if err := botVoiceConnection.Disconnect(); err != nil {
-					m.logger.Error("error disconnecting from channel", zap.Error(err))
-
-					return
-				}
-
-				if guildPlayer, ok := m.guildVoiceStates[vc.GuildID]; ok {
-					guildPlayer.destroyAllViews(session)
-					delete(m.guildVoiceStates, vc.GuildID)
-				}
-			}
-		}
-	}
-}
-
-func (m *playerCog) retrieveTracks(ctx context.Context, audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
-	trackData, err := trackRetriever.GetTracksData(ctx, audioType, query)
-	if err != nil {
-		return nil, fmt.Errorf("retrieving tracks: %w", err)
-	}
-
-	return trackData, nil
-}
-
-func (m *playerCog) reportErrorToSupportChannel(session *discordgo.Session, interaction *discordgo.InteractionCreate, command *discordgo.ApplicationCommand, errCommand error) error {
+func (m *PlayerCog) reportErrorToSupportChannel(session *discordgo.Session, interaction *discordgo.InteractionCreate, command *discordgo.ApplicationCommand, errCommand error) error {
 	guild, err := session.Guild(interaction.GuildID)
 	if err != nil {
 		return fmt.Errorf("getting guild: %w", err)
@@ -379,37 +251,32 @@ func (m *playerCog) reportErrorToSupportChannel(session *discordgo.Session, inte
 	return nil
 }
 
-func (m *playerCog) commandHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
-	if interaction.Type != discordgo.InteractionApplicationCommand {
-		return
-	}
+// this function is called when instantiating the music cog
+func (m *PlayerCog) RegisterCommands(session *discordgo.Session) {
+	commandMapping := slices.Collect(maps.Values(m.getApplicationCommands()))
+	commandsToRegister := funcs.Map(commandMapping, func(ac *commands.ApplicationCommand) *discordgo.ApplicationCommand {
+		return ac.CommandConfiguration
+	})
 
-	commandMapping := m.getApplicationCommands()
-	commandName := interaction.ApplicationCommandData().Name
-
-	if command, ok := commandMapping[commandName]; ok {
-		if err := command.handler(session, interaction); err != nil {
-			if err := m.reportErrorToSupportChannel(session, interaction, command.commandConfiguration, err); err != nil {
-				m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
-			}
-
-			m.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", commandName))
-			message, err := session.ChannelMessageSendEmbed(interaction.ChannelID, embeds.UnexpectedErrorEmbed())
-			if err != nil {
-				m.logger.Warn("failed to send unexpected error message", zap.Error(err))
-			}
-
-			_ = util.DeleteMessageAfterTime(session, interaction.ChannelID, message.ID, 30*time.Second)
-
+	for _, command := range commandsToRegister {
+		if _, err := session.ApplicationCommandCreate(session.State.Application.ID, "", command); err != nil {
+			panic(fmt.Errorf("creating command %s: %w", command.Name, err))
 		}
 	}
+
+	// This handler will delegate all commands to their respective handler.
+	session.AddHandler(m.commandHandler)
+	// Handler for when members join or leave a voice channel.
+	session.AddHandler(m.voiceStateUpdateEvent)
+	// Handler for when bot is kicked out of a guild.
+	session.AddHandler(m.guildDeleteEvent)
 }
 
-func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
-	return map[string]*applicationCommand{
+func (m *PlayerCog) getApplicationCommands() map[string]*commands.ApplicationCommand {
+	return map[string]*commands.ApplicationCommand{
 		"play": {
-			handler: m.play,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.play,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "play",
 				Description: "Plays desired song/playlist",
 				Options: []*discordgo.ApplicationCommandOption{
@@ -423,8 +290,8 @@ func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
 			},
 		},
 		"play-likes": {
-			handler: m.playLikes,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.playLikes,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "play-likes",
 				Description: "Plays songs from a member's liked tracks",
 				Options: []*discordgo.ApplicationCommandOption{
@@ -438,36 +305,36 @@ func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
 			},
 		},
 		"pause": {
-			handler: m.pause,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.pause,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "pause",
 				Description: "Pauses the current track playing",
 			},
 		},
 		"resume": {
-			handler: m.resume,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.resume,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "resume",
 				Description: "Resume the current track",
 			},
 		},
 		"skip": {
-			handler: m.skip,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.skip,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "skip",
 				Description: "Skips the current track playing",
 			},
 		},
 		"rewind": {
-			handler: m.rewind,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.rewind,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "rewind",
 				Description: "Rewinds to the previous track in the queue",
 			},
 		},
 		"swap": {
-			handler: m.swap,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.swap,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "swap",
 				Description: "Swap the position of two tracks in the queue",
 				Options: []*discordgo.ApplicationCommandOption{
@@ -487,39 +354,48 @@ func (m *playerCog) getApplicationCommands() map[string]*applicationCommand {
 			},
 		},
 		"shuffle": {
-			handler: m.shuffle,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.shuffle,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "shuffle",
 				Description: "Shuffles the music queue",
 			},
 		},
 		"clear": {
-			handler: m.clear,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.clear,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "clear",
 				Description: "Clears the entire music queue",
 			},
 		},
 		"queue": {
-			handler: m.queue,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.queue,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "queue",
 				Description: "Displays the music queue",
 			},
 		},
 		"spice": {
-			handler: m.spice,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.spice,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "spice",
 				Description: "Add recommended songs to the queue based on the current song playing",
 			},
 		},
 		"playerview": {
-			handler: m.playerview,
-			commandConfiguration: &discordgo.ApplicationCommand{
+			Handler: m.playerview,
+			CommandConfiguration: &discordgo.ApplicationCommand{
 				Name:        "playerview",
 				Description: "Displays the current music player interface",
 			},
 		},
 	}
+}
+
+func (m *PlayerCog) retrieveTracks(ctx context.Context, audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
+	trackData, err := trackRetriever.GetTracksData(ctx, audioType, query)
+	if err != nil {
+		return nil, fmt.Errorf("retrieving tracks: %w", err)
+	}
+
+	return trackData, nil
 }
