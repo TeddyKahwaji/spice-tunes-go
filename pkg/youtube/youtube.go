@@ -41,23 +41,21 @@ func NewYoutubeSearchWrapper(ctx context.Context, creds []byte) (*SearchWrapper,
 }
 
 func extractYoutubeID(audioType audiotype.SupportedAudioType, fullURL string) (string, error) {
-	playlistRegex := regexp.MustCompile(`[?&]list=([a-zA-Z0-9_-]+)`)
-	singleVideoRegex := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^?&\n]{11})`)
-
 	switch audioType {
-	case audiotype.YoutubePlaylist:
-		matches := playlistRegex.FindStringSubmatch(fullURL)
+	case audiotype.YoutubeSong:
+		matches := audiotype.YoutubeVideoRegex.FindStringSubmatch(fullURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
-	case audiotype.YoutubeSong:
-		matches := singleVideoRegex.FindStringSubmatch(fullURL)
+
+	case audiotype.YoutubePlaylist:
+		matches := audiotype.YoutubePlaylistRegex.FindStringSubmatch(fullURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 	}
 
-	return "", errors.New("error could not extract any ID")
+	return "", errors.New("error: could not extract any ID")
 }
 
 func (yt *SearchWrapper) GetTracksData(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {

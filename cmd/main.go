@@ -76,12 +76,11 @@ func newFirebaseClient(ctx context.Context, projectID string) (*firebase.Client,
 }
 
 func main() {
-	env := os.Getenv("ENV")
 	discordToken := os.Getenv("SPICE_TUNES_DISCORD_TOKEN")
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 
-	logger := logger.NewLogger(env)
+	logger := logger.NewLogger()
 	defer func() {
 		if err := logger.Sync(); err != nil {
 			logger.Warn("could not sync logger", zap.Error(err))

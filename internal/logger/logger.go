@@ -1,8 +1,7 @@
 package logger
 
 import (
-	"strings"
-
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -15,8 +14,8 @@ func ChannelID(channelID string) zapcore.Field {
 	return zap.String("channel_id", channelID)
 }
 
-func NewLogger(env string) *zap.Logger {
-	if strings.ToUpper(env) == "PROD" {
+func NewLogger() *zap.Logger {
+	if util.IsProd() {
 		return zap.Must(zap.NewProduction(zap.WithCaller(true)))
 	}
 

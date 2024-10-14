@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"sync"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
@@ -344,25 +343,22 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 }
 
 func extractSpotifyID(audioType audiotype.SupportedAudioType, spotifyURL string) (string, error) {
-	playlistRegex := regexp.MustCompile(audiotype.SpotifyPlaylistRegex)
-	singleTrackRegex := regexp.MustCompile(audiotype.SpotifyTrackRegex)
-	albumRegex := regexp.MustCompile(audiotype.SpotifyAlbumRegex)
 
 	switch audioType {
 	case audiotype.SpotifyPlaylist:
-		matches := playlistRegex.FindStringSubmatch(spotifyURL)
+		matches := audiotype.SpotifyPlaylistRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 
 	case audiotype.SpotifyAlbum:
-		matches := albumRegex.FindStringSubmatch(spotifyURL)
+		matches := audiotype.SpotifyAlbumRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}
 
 	case audiotype.SpotifyTrack:
-		matches := singleTrackRegex.FindStringSubmatch(spotifyURL)
+		matches := audiotype.SpotifyTrackRegex.FindStringSubmatch(spotifyURL)
 		if len(matches) > 1 {
 			return matches[1], nil
 		}

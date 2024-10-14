@@ -5,7 +5,7 @@ import (
 
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
-	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 )
@@ -59,8 +59,10 @@ func (m *PlayerCog) commandHandler(session *discordgo.Session, interaction *disc
 
 	if command, ok := commandMapping[commandName]; ok {
 		if err := command.Handler(session, interaction); err != nil {
-			if err := m.reportErrorToSupportChannel(session, interaction, command.CommandConfiguration, err); err != nil {
-				m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
+			if util.IsProd() {
+				if err := m.reportErrorToSupportChannel(session, interaction, command.CommandConfiguration, err); err != nil {
+					m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
+				}
 			}
 
 			m.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", commandName))

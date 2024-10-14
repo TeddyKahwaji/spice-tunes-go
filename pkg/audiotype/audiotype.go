@@ -44,13 +44,14 @@ const (
 	GenericSearch      SupportedAudioType = "GenericSearchAudio"
 )
 
-const (
-	YoutubeVideoRegex    = `^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube(-nocookie)?\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$`
-	YoutubePlaylistRegex = `^.*(youtu.be\/|list=)([^#\&\?]*).*`
-	SpotifyAlbumRegex    = `https:\/\/open\.spotify\.com\/album\/([a-zA-Z0-9]+)`
-	SpotifyPlaylistRegex = `https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)`
-	SpotifyTrackRegex    = `https:\/\/open\.spotify\.com\/track\/([a-zA-Z0-9]+)`
-	SoundCloudRegex      = `^https?:\/\/(soundcloud\.com|snd\.sc)\/(.*)$`
+var (
+	YoutubeVideoRegex    = regexp.MustCompile(`^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:\S+)?$`)
+	YoutubePlaylistRegex = regexp.MustCompile(`[?&]list=([a-zA-Z0-9_-]+)`)
+	SpotifyAlbumRegex    = regexp.MustCompile(`https:\/\/open\.spotify\.com\/album\/([a-zA-Z0-9]+)`)
+	SpotifyPlaylistRegex = regexp.MustCompile(`https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)`)
+	SpotifyTrackRegex    = regexp.MustCompile(`https:\/\/open\.spotify\.com\/track\/([a-zA-Z0-9]+)`)
+	SoundCloudRegex      = regexp.MustCompile(`^https?:\/\/(soundcloud\.com|snd\.sc)\/(.*)$`)
+	SoundCloudSetsRegex  = regexp.MustCompile(`sets`)
 )
 
 var (
@@ -59,25 +60,40 @@ var (
 )
 
 func DetermineAudioType(query string) (SupportedAudioType, error) {
-	if matched, _ := regexp.MatchString(YoutubePlaylistRegex, query); matched {
-		return YoutubePlaylist, nil
-	} else if matched, _ := regexp.MatchString(YoutubeVideoRegex, query); matched {
+	// YouTube Video (prioritize video ID first)
+	if YoutubeVideoRegex.MatchString(query) {
 		return YoutubeSong, nil
-	} else if matched, _ := regexp.MatchString(SpotifyPlaylistRegex, query); matched {
+	}
+
+	// YouTube Playlist (only match if list= is in the URL)
+	if YoutubePlaylistRegex.MatchString(query) {
+		return YoutubePlaylist, nil
+	}
+
+	// Spotify Playlist
+	if SpotifyPlaylistRegex.MatchString(query) {
 		return SpotifyPlaylist, nil
-	} else if matched, _ := regexp.MatchString(SpotifyAlbumRegex, query); matched {
+	}
+
+	// Spotify Album
+	if SpotifyAlbumRegex.MatchString(query) {
 		return SpotifyAlbum, nil
-	} else if matched, _ := regexp.MatchString(SpotifyTrackRegex, query); matched {
+	}
+
+	// Spotify Track
+	if SpotifyTrackRegex.MatchString(query) {
 		return SpotifyTrack, nil
-	} else if matched, _ := regexp.MatchString(SoundCloudRegex, query); matched {
-		if regexp.MustCompile(`sets`).MatchString(query) {
+	}
+
+	// SoundCloud
+	if SoundCloudRegex.MatchString(query) {
+		if SoundCloudSetsRegex.MatchString(query) {
 			return SoundCloudPlaylist, nil
 		}
-
 		return SoundCloudTrack, nil
 	}
 
-	// if input is not a URL assume it is a generic search.
+	// Assume it is a generic search if the input is not a URL
 	if u, err := url.Parse(query); err != nil || u.Scheme == "" || u.Host == "" {
 		return GenericSearch, nil
 	}

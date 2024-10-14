@@ -11,9 +11,9 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/pagination"
-	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/views"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"

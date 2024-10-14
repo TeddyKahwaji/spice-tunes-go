@@ -2,6 +2,8 @@ package util
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -27,6 +29,10 @@ func GetGuild(session *discordgo.Session, guildID string) (*discordgo.Guild, err
 	}
 
 	return guild, nil
+}
+
+func IsProd() bool {
+	return strings.ToUpper(os.Getenv("ENV")) == "PROD"
 }
 
 func GetVoiceChannelMemberCount(session *discordgo.Session, guildID, channelID string) (int, error) {

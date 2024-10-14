@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 )

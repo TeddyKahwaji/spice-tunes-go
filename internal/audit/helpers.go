@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
+	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/commands"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
-	"github.com/TeddyKahwaji/spice-tunes-go/pkg/util"
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 )
