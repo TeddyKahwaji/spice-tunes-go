@@ -298,7 +298,7 @@ func ErrorLogEmbed(command *discordgo.ApplicationCommand, guild *discordgo.Guild
 	}
 
 	if len(options) > 0 {
-		commandInputs := funcs.Map[*discordgo.ApplicationCommandInteractionDataOption, string](options, func(options *discordgo.ApplicationCommandInteractionDataOption) string {
+		commandInputs := funcs.Map(options, func(options *discordgo.ApplicationCommandInteractionDataOption) string {
 			return fmt.Sprintf("%s: %v", options.Name, options.Value)
 		})
 

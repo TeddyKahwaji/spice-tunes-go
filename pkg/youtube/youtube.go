@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
@@ -217,14 +219,25 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 		}
 
 		eg.Go(func() error {
-			for _, item := range items {
+			ids := funcs.Map(items, func(playlistItem *youtube.PlaylistItem) string {
+				return playlistItem.ContentDetails.VideoId
+			})
+
+			videos, err := yt.ytVideoService.List([]string{"snippet", "contentDetails"}).
+				Id(strings.Join(ids, ",")).
+				Do()
+
+			if err != nil {
+				return fmt.Errorf("listing video ids: %w", err)
+			}
+
+			for _, item := range videos.Items {
 				data := &audiotype.TrackData{
 					Requester: requesterName,
 					ID:        ID,
 				}
 
-				videoID := item.Snippet.ResourceId.VideoId
-
+				videoID := item.Id
 				if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
 					var thumbnailURL string
 					if thumbnails.Maxres != nil {
@@ -239,23 +252,12 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 				fullURL := YoutubeVideoBase + videoID
 
 				title := item.Snippet.Title
-				if item.ContentDetails.StartAt != "" && item.ContentDetails.EndAt != "" {
-					startAt := item.ContentDetails.StartAt
-					endAt := item.ContentDetails.EndAt
-
-					startTime, err := time.Parse(time.RFC3339, startAt)
-					if err != nil {
-						return fmt.Errorf("error parsing StartAt: %w", err)
-					}
-
-					endTime, err := time.Parse(time.RFC3339, endAt)
-					if err != nil {
-						return fmt.Errorf("error parsing EndAt: %w", err)
-					}
-
-					data.Duration = endTime.Sub(startTime)
+				duration, err := parseISO8601Duration(item.ContentDetails.Duration)
+				if err != nil {
+					return fmt.Errorf("retrieving duration of video: %w", err)
 				}
 
+				data.Duration = duration
 				data.TrackName = title
 				data.Query = fullURL
 
