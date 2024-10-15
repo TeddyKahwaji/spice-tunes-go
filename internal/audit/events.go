@@ -23,6 +23,10 @@ func (m *AuditCog) guildDeleteEvent(session *discordgo.Session, guildDeleteEvent
 
 func (m *AuditCog) guildJoinedEvent(session *discordgo.Session, guildJoinedEvent *discordgo.GuildCreate) {
 	if util.IsProd() {
+		if guildJoinedEvent.Unavailable {
+			return
+		}
+
 		_, err := session.ChannelMessageSendEmbed(guildAuditLogChannelID, embeds.GuildAuditEmbed(guildJoinedEvent.Guild, true))
 		if err != nil {
 			m.logger.Warn("unable to send guild audit joined event", zap.Error(err), logger.GuildID(guildJoinedEvent.Guild.ID))
