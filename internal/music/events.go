@@ -59,10 +59,8 @@ func (m *PlayerCog) commandHandler(session *discordgo.Session, interaction *disc
 
 	if command, ok := commandMapping[commandName]; ok {
 		if err := command.Handler(session, interaction); err != nil {
-			if util.IsProd() {
-				if err := m.reportErrorToSupportChannel(session, interaction, command.CommandConfiguration, err); err != nil {
-					m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
-				}
+			if err := m.reportErrorToSupportChannel(session, interaction, command.CommandConfiguration, err); err != nil {
+				m.logger.Warn("could not report error to support channel", zap.Error(err), logger.GuildID(interaction.GuildID))
 			}
 
 			m.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", commandName))

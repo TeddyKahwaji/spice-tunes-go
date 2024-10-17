@@ -86,7 +86,7 @@ func newGuildPlayer(vc *discordgo.VoiceConnection, channelID string, fireStoreCl
 		voiceClient:     vc,
 		guildID:         vc.GuildID,
 		channelID:       channelID,
-		queue:           []*audiotype.TrackData{},
+		queue:           make([]*audiotype.TrackData, 0),
 		views:           make(map[*guildView]struct{}),
 		logger:          logger,
 		voiceState:      notPlaying,
@@ -449,11 +449,25 @@ func (g *guildPlayer) getCurrentPointer() int {
 	return int(g.queuePtr.Load())
 }
 
+func (g *guildPlayer) removeTrack(position int) (*audiotype.TrackData, error) {
+	if !g.isValidPosition(position) || position == 0 {
+		return nil, errInvalidPosition
+	}
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	track := g.queue[position]
+	g.queue = append(g.queue[:position], g.queue[position+1:]...)
+
+	return track, nil
+}
+
 func (g *guildPlayer) isValidPosition(position int) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	return position < len(g.queue)
+	return position >= 0 && position < len(g.queue)
 }
 
 // unlike resetQueue, this resets the queue to

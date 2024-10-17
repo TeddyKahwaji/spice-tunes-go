@@ -198,6 +198,10 @@ func (m *PlayerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 		return err
 	}
 
+	if trackData == nil {
+		return errors.New("unable to retrieve audio data")
+	}
+
 	if err := m.addToQueue(session, interaction, trackData, guildPlayer); err != nil {
 		return fmt.Errorf("adding to queue: %w", err)
 	}
@@ -282,8 +286,8 @@ func (m *PlayerCog) skip(session *discordgo.Session, interaction *discordgo.Inte
 			m.logger.Warn("unable to refresh view state", zap.Error(err), logger.GuildID(interaction.GuildID))
 		}
 	} else {
-		guildPlayer.resetQueue()
 		guildPlayer.destroyAllViews(session)
+		guildPlayer.resetQueue()
 	}
 
 	guildPlayer.sendStopSignal()
@@ -423,6 +427,74 @@ func (m *PlayerCog) rewind(session *discordgo.Session, interaction *discordgo.In
 	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
 		Type:   discordgo.InteractionResponseChannelMessageWithSource,
 		Embeds: embeds.MusicPlayerActionEmbed("⏪ ***Rewind*** 👍", *interaction.Member),
+	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
+		return fmt.Errorf("sending message: %w", err)
+	}
+
+	return nil
+}
+
+func (m *PlayerCog) remove(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	isInVoiceChannel, err := m.verifyInChannelAndSendError(session, interaction)
+	if err != nil {
+		return fmt.Errorf("verifying user is in voice channel: %w", err)
+	}
+
+	if !isInVoiceChannel {
+		return nil
+	}
+
+	guildPlayer, ok := m.guildVoiceStates[interaction.GuildID]
+	if !ok || guildPlayer.remainingQueueLength() == 0 {
+		invalidUsageEmbed := embeds.ErrorMessageEmbed("The queue is empty")
+		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			Embeds: invalidUsageEmbed,
+			FlagWrapper: &util.FlagWrapper{
+				Flags: discordgo.MessageFlagsEphemeral,
+			},
+		}
+
+		err := util.SendMessage(session, interaction.Interaction, false, msgData)
+		if err != nil {
+			return fmt.Errorf("interaction response: %w", err)
+		}
+
+		return nil
+	}
+
+	options := interaction.ApplicationCommandData().Options
+	position := int(options[0].IntValue()) + guildPlayer.getCurrentPointer()
+
+	trackAtPosition, err := guildPlayer.removeTrack(position)
+	if err != nil {
+		if errors.Is(err, errInvalidPosition) {
+			invalidUsageEmbed := embeds.ErrorMessageEmbed("The position you entered are incorrect, please check the queue and try again")
+			msgData := util.MessageData{
+				Embeds: invalidUsageEmbed,
+				Type:   discordgo.InteractionResponseChannelMessageWithSource,
+				FlagWrapper: &util.FlagWrapper{
+					Flags: discordgo.MessageFlagsEphemeral,
+				},
+			}
+
+			err := util.SendMessage(session, interaction.Interaction, false, msgData)
+			if err != nil {
+				return fmt.Errorf("interaction response: %w", err)
+			}
+
+			return nil
+		}
+		return fmt.Errorf("removing track from guild player: %w", err)
+	}
+
+	if err := guildPlayer.refreshState(session); err != nil {
+		m.logger.Warn("unable to refresh view state", zap.Error(err), logger.GuildID(interaction.GuildID))
+	}
+
+	if err = util.SendMessage(session, interaction.Interaction, false, util.MessageData{
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
+		Embeds: embeds.MusicPlayerActionEmbed(fmt.Sprintf("**%s** has been removed from the queue", trackAtPosition.TrackName), *interaction.Member),
 	}, util.WithDeletion(30*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}

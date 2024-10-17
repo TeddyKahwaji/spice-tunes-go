@@ -353,6 +353,21 @@ func (m *PlayerCog) getApplicationCommands() map[string]*commands.ApplicationCom
 				},
 			},
 		},
+		"remove": {
+			Handler: m.remove,
+			CommandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "remove",
+				Description: "Removes a specific track from the music queue by its position.",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:        "track_position",
+						Description: "The position of the track in the queue to remove.",
+						Type:        discordgo.ApplicationCommandOptionInteger,
+						Required:    true,
+					},
+				},
+			},
+		},
 		"shuffle": {
 			Handler: m.shuffle,
 			CommandConfiguration: &discordgo.ApplicationCommand{
