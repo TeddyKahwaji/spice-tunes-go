@@ -50,7 +50,7 @@ func WithDeletion(deletionTimer time.Duration) ConfigOpts {
 
 // View struct represents a view that can send, edit, or delete messages with components and embeds.
 type View struct {
-	Config    Config             // Holds the configuration for the view.
+	Config    *Config            // Holds the configuration for the view.
 	message   *discordgo.Message // The message object returned from Discord.
 	MessageID string             // The ID of the sent message.
 	ChannelID string             // The ID of the channel where the message was sent.
@@ -60,9 +60,9 @@ type View struct {
 type Handler func(*discordgo.Interaction) error
 
 // NewView creates and returns a new View with the given configuration and optional configuration options.
-func NewView(config Config, opts ...ConfigOpts) *View {
+func NewView(config *Config, opts ...ConfigOpts) *View {
 	for _, opt := range opts {
-		opt(&config) // Apply the functional options to modify the Config.
+		opt(config) // Apply the functional options to modify the Config.
 	}
 
 	return &View{
@@ -72,7 +72,7 @@ func NewView(config Config, opts ...ConfigOpts) *View {
 
 // EditView updates the message components and embeds of an existing message.
 // It uses ChannelMessageEditComplex to edit the message in the channel.
-func (v *View) EditView(viewConfig Config, session *discordgo.Session) error {
+func (v *View) EditView(viewConfig *Config, session *discordgo.Session) error {
 	if _, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		ID:         v.MessageID,
 		Channel:    v.ChannelID,

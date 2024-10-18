@@ -32,6 +32,11 @@ func NewPaginatedConfig[T any](data []*T, separator int) *PaginationConfig[T] {
 	}
 }
 
+func (p *PaginationConfig[T]) UpdateData(data []*T, separator int) {
+	p.Data = data
+	p.Separator = separator
+}
+
 // PaginationListButtonsConfig defines the state of the pagination buttons.
 // Each field determines whether a corresponding button is disabled in the pagination UI.
 type PaginationListButtonsConfig struct {

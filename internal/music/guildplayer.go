@@ -99,7 +99,7 @@ func (g *guildPlayer) hasView() bool {
 	return len(g.views) > 0
 }
 
-func (g *guildPlayer) getMusicPlayerViewConfig() views.Config {
+func (g *guildPlayer) getMusicPlayerViewConfig() *views.Config {
 	currentTrack := g.queue[g.queuePtr.Load()]
 
 	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack)
@@ -133,7 +133,7 @@ func (g *guildPlayer) getMusicPlayerViewConfig() views.Config {
 
 	musicPlayerButtons := embeds.GetMusicPlayerButtons(buttonsConfig)
 
-	return views.Config{
+	return &views.Config{
 		Components: &views.ComponentHandler{
 			MessageComponents: musicPlayerButtons,
 		},
@@ -207,9 +207,10 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 
 	handler := func(passedInteraction *discordgo.Interaction) error {
 		messageID := passedInteraction.Message.ID
-		viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
+		paginationConfig.UpdateData(g.queue[g.getCurrentPointer()+1:], paginationSeparator)
 
-		_, err := session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		viewConfig := paginationConfig.GetViewConfig(getQueueEmbed)
+		_, err = session.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			ID:         messageID,
 			Channel:    passedInteraction.ChannelID,
 			Components: &viewConfig.Components.MessageComponents,
@@ -230,7 +231,7 @@ func (g *guildPlayer) generateMusicQueueView(interaction *discordgo.Interaction,
 	// GetBaseHandler, will handle the button interactions while the passed handler will execute
 	// after updating button state
 	handler = paginationConfig.GetBaseHandler(session, handler)
-	queueView := views.NewView(*viewConfig, views.WithLogger(g.logger), views.WithDeletion(5*time.Minute))
+	queueView := views.NewView(viewConfig, views.WithLogger(g.logger), views.WithDeletion(5*time.Minute))
 
 	if err := queueView.SendView(interaction, session, handler); err != nil {
 		return fmt.Errorf("sending queue view: %w", err)
@@ -414,7 +415,7 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 
 			viewConfig := queueViewConfig.GetViewConfig(getQueueEmbed)
 
-			if err := guildView.view.EditView(*viewConfig, session); err != nil {
+			if err := guildView.view.EditView(viewConfig, session); err != nil {
 				g.logger.Warn("unable to refresh queue view", zap.Error(err))
 				delete(g.views, guildView)
 			}
