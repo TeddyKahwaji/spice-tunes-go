@@ -226,7 +226,6 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 			videos, err := yt.ytVideoService.List([]string{"snippet", "contentDetails"}).
 				Id(strings.Join(ids, ",")).
 				Do()
-
 			if err != nil {
 				return fmt.Errorf("listing video ids: %w", err)
 			}

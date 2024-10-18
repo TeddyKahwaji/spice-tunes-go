@@ -245,6 +245,7 @@ func (s *SpotifyClientWrapper) handleAlbumData(requesterName string, spotifyTrac
 
 		if result.Tracks.Next == "" {
 			wg.Wait()
+
 			break
 		}
 
@@ -343,7 +344,6 @@ func (s *SpotifyClientWrapper) handlePlaylistData(requesterName string, spotifyT
 }
 
 func extractSpotifyID(audioType audiotype.SupportedAudioType, spotifyURL string) (string, error) {
-
 	switch audioType {
 	case audiotype.SpotifyPlaylist:
 		matches := audiotype.SpotifyPlaylistRegex.FindStringSubmatch(spotifyURL)

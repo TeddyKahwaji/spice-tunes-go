@@ -354,7 +354,6 @@ func (m *PlayerCog) pause(session *discordgo.Session, interaction *discordgo.Int
 		return fmt.Errorf("pausing: %w", err)
 	}
 
-	guildPlayer.sendStopSignal()
 	if err := guildPlayer.refreshState(session); err != nil {
 		m.logger.Warn("unable to refresh view state", zap.Error(err), logger.GuildID(interaction.GuildID))
 	}
@@ -739,6 +738,7 @@ func (m *PlayerCog) resume(session *discordgo.Session, interaction *discordgo.In
 	if !ok || !guildPlayer.isPaused() {
 		invalidUsageEmbed := embeds.ErrorMessageEmbed("There is no track currently paused to resume.")
 		msgData := util.MessageData{
+			Type:   discordgo.InteractionResponseChannelMessageWithSource,
 			Embeds: invalidUsageEmbed,
 			FlagWrapper: &util.FlagWrapper{
 				Flags: discordgo.MessageFlagsEphemeral,

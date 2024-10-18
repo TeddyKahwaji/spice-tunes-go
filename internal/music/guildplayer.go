@@ -410,6 +410,7 @@ func (g *guildPlayer) refreshState(session *discordgo.Session) error {
 			if deleteQueueView {
 				_ = guildView.view.DeleteView(session)
 				delete(g.views, guildView)
+
 				continue
 			}
 
@@ -569,6 +570,9 @@ func (g *guildPlayer) shuffleQueue() {
 }
 
 func (g *guildPlayer) pause() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	if g.stream == nil {
 		return errStreamNonExistent
 	}
@@ -593,6 +597,9 @@ func (g *guildPlayer) remainingQueueLength() int {
 }
 
 func (g *guildPlayer) resume() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	if g.stream == nil {
 		return errStreamNonExistent
 	}
