@@ -164,6 +164,21 @@ func (m *PlayerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 
 	audioType, err := audiotype.DetermineAudioType(query)
 	if err != nil {
+		if errors.Is(err, audiotype.ErrUnsupportedAudioType) {
+			invalidUsageEmbed := embeds.ErrorMessageEmbed("The provided track type is not supported. Please enter a YouTube or Spotify link.")
+			msgData := util.MessageData{
+				Embeds: invalidUsageEmbed,
+				Type:   discordgo.InteractionResponseChannelMessageWithSource,
+			}
+
+			err := util.SendMessage(session, interaction.Interaction, true, msgData, util.WithDeletion(10*time.Second, interaction.ChannelID))
+			if err != nil {
+				return fmt.Errorf("sending follow up message: %w", err)
+			}
+
+			return nil
+		}
+
 		return fmt.Errorf("determining audio type: %w", err)
 	}
 
