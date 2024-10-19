@@ -199,8 +199,8 @@ func MusicPlayerEmbed(trackData *audiotype.TrackData) *discordgo.MessageEmbed {
 }
 
 func CreatedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
-	const playlistAddCommandID string = "1297214920739393537"
-	const playlistPlayCommandID string = "1297297291979259977"
+	const playlistAddCommandID string = "1297318617305841835"
+	const playlistPlayCommandID string = "1297318620401238077"
 
 	return &discordgo.MessageEmbed{
 		Title: "Playlist Created",
@@ -220,8 +220,8 @@ func CreatedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
 }
 
 func DeletedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
-	const playlistCreateCommandID string = "1297033190522884116"
-	const playlistPlayCommandID string = "1297297291979259977"
+	const playlistCreateCommandID string = "1297318614810099853"
+	const playlistPlayCommandID string = "1297318620401238077"
 
 	return &discordgo.MessageEmbed{
 		Title: "Playlist Deleted",
@@ -241,7 +241,7 @@ func DeletedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
 }
 
 func AddedTracksToUserPlaylistEmbed(tracksAdded int, totalTrackCount int, playlistName string, member *discordgo.Member) *discordgo.MessageEmbed {
-	const playlistPlayCommandID string = "1297297291979259977"
+	const playlistPlayCommandID string = "1297318620401238077"
 
 	return &discordgo.MessageEmbed{
 		Color:       LightPink,
