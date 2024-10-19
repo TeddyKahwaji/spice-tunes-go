@@ -12,24 +12,32 @@ const (
 	guildAuditLogChannelID = "1094732412845576268"
 )
 
-func (m *AuditCog) guildDeleteEvent(session *discordgo.Session, guildDeleteEvent *discordgo.GuildDelete) {
+func (a *AuditCog) guildDeleteEvent(session *discordgo.Session, guildDeleteEvent *discordgo.GuildDelete) {
 	if util.IsProd() {
 		_, err := session.ChannelMessageSendEmbed(guildAuditLogChannelID, embeds.GuildAuditEmbed(guildDeleteEvent.BeforeDelete, false))
 		if err != nil {
-			m.logger.Warn("unable to send guild audit delete event", zap.Error(err), logger.GuildID(guildDeleteEvent.ID))
+			a.logger.Warn("unable to send guild audit delete event", zap.Error(err), logger.GuildID(guildDeleteEvent.ID))
 		}
+
+		delete(a.alreadyJoinedGuilds, guildDeleteEvent.ID)
 	}
 }
 
-func (m *AuditCog) guildJoinedEvent(session *discordgo.Session, guildJoinedEvent *discordgo.GuildCreate) {
+func (a *AuditCog) guildJoinedEvent(session *discordgo.Session, guildJoinedEvent *discordgo.GuildCreate) {
 	if util.IsProd() {
 		if guildJoinedEvent.Unavailable {
 			return
 		}
 
+		if _, exists := a.alreadyJoinedGuilds[guildJoinedEvent.Guild.ID]; exists {
+			return
+		}
+
 		_, err := session.ChannelMessageSendEmbed(guildAuditLogChannelID, embeds.GuildAuditEmbed(guildJoinedEvent.Guild, true))
 		if err != nil {
-			m.logger.Warn("unable to send guild audit joined event", zap.Error(err), logger.GuildID(guildJoinedEvent.Guild.ID))
+			a.logger.Warn("unable to send guild audit joined event", zap.Error(err), logger.GuildID(guildJoinedEvent.Guild.ID))
 		}
+
+		a.alreadyJoinedGuilds[guildJoinedEvent.Guild.ID] = struct{}{}
 	}
 }

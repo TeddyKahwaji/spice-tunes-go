@@ -15,9 +15,10 @@ type CogConfig struct {
 }
 
 type AuditCog struct {
-	session    *discordgo.Session
-	logger     *zap.Logger
-	httpClient *http.Client
+	session             *discordgo.Session
+	logger              *zap.Logger
+	httpClient          *http.Client
+	alreadyJoinedGuilds map[string]struct{}
 }
 
 func NewAuditCog(config *CogConfig) (*AuditCog, error) {
@@ -28,9 +29,14 @@ func NewAuditCog(config *CogConfig) (*AuditCog, error) {
 	}
 
 	auditCog := &AuditCog{
-		session:    config.Session,
-		httpClient: config.HTTPClient,
-		logger:     config.Logger,
+		session:             config.Session,
+		httpClient:          config.HTTPClient,
+		logger:              config.Logger,
+		alreadyJoinedGuilds: make(map[string]struct{}),
+	}
+
+	for _, guild := range config.Session.State.Guilds {
+		auditCog.alreadyJoinedGuilds[guild.ID] = struct{}{}
 	}
 
 	// handles all incoming commands
