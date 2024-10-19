@@ -268,7 +268,23 @@ func (m *PlayerCog) RegisterCommands(session *discordgo.Session) {
 		return ac.CommandConfiguration
 	})
 
+	// Fetch existing commands
+	existingCommands, err := session.ApplicationCommands(session.State.Application.ID, "")
+	if err != nil {
+		panic(fmt.Errorf("failed to fetch existing commands: %w", err))
+	}
+
+	existingCommandNames := make(map[string]struct{})
+	for _, cmd := range existingCommands {
+		existingCommandNames[cmd.Name] = struct{}{}
+	}
+
 	for _, command := range commandsToRegister {
+		if _, exists := existingCommandNames[command.Name]; exists {
+			m.logger.Info("Skipping registering command, since it already exists", zap.String("command_name", command.Name))
+			continue
+		}
+
 		if _, err := session.ApplicationCommandCreate(session.State.Application.ID, "", command); err != nil {
 			panic(fmt.Errorf("creating command %s: %w", command.Name, err))
 		}
@@ -460,7 +476,23 @@ func (m *PlayerCog) getApplicationCommands() map[string]*commands.ApplicationCom
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Name:         "playlist_name",
-						Description:  "The name of the playlist you want to play.",
+						Description:  "The name of the playlist you want to play",
+						Type:         discordgo.ApplicationCommandOptionString,
+						Required:     true,
+						Autocomplete: true,
+					},
+				},
+			},
+		},
+		"playlist-delete": {
+			Handler: m.playlistDelete,
+			CommandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "playlist-delete",
+				Description: "Delete one of your saved playlists.",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:         "playlist_name",
+						Description:  "The name of the playlist you want to delete",
 						Type:         discordgo.ApplicationCommandOptionString,
 						Required:     true,
 						Autocomplete: true,

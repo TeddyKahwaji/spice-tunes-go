@@ -31,6 +31,7 @@ func (m *PlayerCog) handleAutocomplete(session *discordgo.Session, interaction *
 	option := interaction.ApplicationCommandData().Options[0]
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
+
 	if option.Name == playlistNameOption {
 		userID := interaction.Member.User.ID
 		playlists, err := m.userPlaylistRetriever.getUserPlaylists(ctx, userID)

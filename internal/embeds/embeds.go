@@ -198,13 +198,62 @@ func MusicPlayerEmbed(trackData *audiotype.TrackData) *discordgo.MessageEmbed {
 	}
 }
 
+func CreatedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
+	const playlistAddCommandID string = "1297214920739393537"
+	const playlistPlayCommandID string = "1297297291979259977"
+
+	return &discordgo.MessageEmbed{
+		Title: "Playlist Created",
+		Color: LightPink,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Value: fmt.Sprintf("Playlist `%s` has been created\n\n", playlistName),
+			},
+			{
+				Value: fmt.Sprintf("`-` To add tracks to your playlist use </playlist-add:%s>\n`-` To play your playlist use </playlist-play:%s>", playlistAddCommandID, playlistPlayCommandID),
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: newPlaylist.String(),
+		},
+	}
+}
+
+func DeletedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
+	const playlistCreateCommandID string = "1297033190522884116"
+	const playlistPlayCommandID string = "1297297291979259977"
+
+	return &discordgo.MessageEmbed{
+		Title: "Playlist Deleted",
+		Color: LightPink,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Value: fmt.Sprintf("Playlist `%s` has been created\n\n", playlistName),
+			},
+			{
+				Value: fmt.Sprintf("`-` To create a playlist use </playlist-create:%s>\n`-` To play your playlist use </playlist-play:%s>", playlistCreateCommandID, playlistPlayCommandID),
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: noddingHead.String(),
+		},
+	}
+}
+
 func AddedTracksToUserPlaylistEmbed(tracksAdded int, totalTrackCount int, playlistName string, member *discordgo.Member) *discordgo.MessageEmbed {
+	const playlistPlayCommandID string = "1297297291979259977"
+
 	return &discordgo.MessageEmbed{
 		Color:       LightPink,
 		Title:       "🎶 Tracks Added! 🎶",
 		Description: fmt.Sprintf("You successfully added **%d** tracks to the playlist **`%s`**!", tracksAdded, playlistName),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: noddingHead.String(),
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Value: fmt.Sprintf("`-` To play this playlist use </playlist-play:%s>\n", playlistPlayCommandID),
+			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    fmt.Sprintf("Total Tracks: %d", totalTrackCount),
@@ -274,24 +323,6 @@ func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.
 		Footer: &discordgo.MessageEmbedFooter{
 			IconURL: member.AvatarURL(""),
 			Text:    "Action initiated by " + member.User.Username,
-		},
-	}
-}
-
-func CreatedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
-	return &discordgo.MessageEmbed{
-		Title: "Playlist Created",
-		Color: LightPink,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Value: fmt.Sprintf("Playlist `%s` has been created\n\n", playlistName),
-			},
-			{
-				Value: "`-` To add tracks to your playlist use </playlist-add>\n`-` To play your playlist use </playlist-play>",
-			},
-		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: newPlaylist.String(),
 		},
 	}
 }

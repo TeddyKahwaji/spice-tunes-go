@@ -67,7 +67,48 @@ func (u *userPlaylistRetriever) getUserPlaylist(ctx context.Context, userID stri
 	return nil, errPlaylistDoesNotExist
 }
 
-func (u *userPlaylistRetriever) updateUsersPlaylist(ctx context.Context, userID string, playlistName string, newTracks []*audiotype.TrackData) (*userCreatedPlaylist, error) {
+func (u *userPlaylistRetriever) deleteUserPlaylist(ctx context.Context, userID string, playlistName string) error {
+	doc, err := u.fireStoreClient.GetDocumentFromCollection(ctx, savedPlaylistsField, userID).Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return errPlaylistDoesNotExist
+		}
+
+		return fmt.Errorf("getting user playlist from collection: %w", err)
+	}
+
+	var playlists usersPlaylists
+
+	if err := doc.DataTo(&playlists); err != nil {
+		return fmt.Errorf("could not transform document data to userPlaylists: %w", err)
+	}
+
+	if len(playlists.Playlists) == 0 {
+		return errPlaylistDoesNotExist
+	}
+
+	found := false
+	for i, playlist := range playlists.Playlists {
+		if strings.EqualFold(playlist.Name, playlistName) {
+			playlists.Playlists = append(playlists.Playlists[:i], playlists.Playlists[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return errPlaylistDoesNotExist
+	}
+
+	// Update Firestore with the modified playlists array
+	if _, err := doc.Ref.Set(ctx, playlists); err != nil {
+		return fmt.Errorf("updating saved playlist document: %w", err)
+	}
+
+	return nil
+}
+
+func (u *userPlaylistRetriever) updateUserPlaylist(ctx context.Context, userID string, playlistName string, newTracks []*audiotype.TrackData) (*userCreatedPlaylist, error) {
 	doc, err := u.fireStoreClient.GetDocumentFromCollection(ctx, savedPlaylistsField, userID).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
@@ -146,13 +187,19 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 	docRef, err := u.fireStoreClient.GetDocumentFromCollection(ctx, savedPlaylistsField, userID).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			if _, err := docRef.Ref.Set(ctx, usersPlaylists{
+
+			userPlaylists := usersPlaylists{
 				Playlists: []*userCreatedPlaylist{playlistData},
-			}); err != nil {
+			}
+
+			if _, err := docRef.Ref.Set(ctx, userPlaylists); err != nil {
 				return fmt.Errorf("creating saved playlist: %w", err)
 			}
 
+			u.playlistCache[userID] = &userPlaylists
+
 			return nil
+
 		}
 
 		return fmt.Errorf("getting document: %w", err)
@@ -168,6 +215,8 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 			return errPlaylistAlreadyExists
 		}
 	}
+
+	u.playlistCache[userID] = &usersPlaylists
 
 	// Update existing document with the new playlist
 	if _, err := docRef.Ref.Update(ctx, []firestore.Update{

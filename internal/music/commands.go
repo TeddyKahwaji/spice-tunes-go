@@ -167,7 +167,7 @@ func (m *PlayerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 	}
 
 	options := interaction.ApplicationCommandData().Options
-	query := options[0].Value.(string)
+	query := options[0].StringValue()
 
 	audioType, err := audiotype.DetermineAudioType(query)
 	if err != nil {
@@ -836,7 +836,7 @@ func (m *PlayerCog) playerview(session *discordgo.Session, interaction *discordg
 
 func (m *PlayerCog) playlistCreate(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
 	options := interaction.ApplicationCommandData().Options
-	playlistName := options[0].Value.(string)
+	playlistName := options[0].StringValue()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
@@ -922,7 +922,7 @@ func (m *PlayerCog) playlistAdd(session *discordgo.Session, interaction *discord
 		return fmt.Errorf("retrieving tracks: %w", err)
 	}
 
-	updatedPlaylist, err := m.userPlaylistRetriever.updateUsersPlaylist(ctx, userID, playlistName, trackData.Tracks)
+	updatedPlaylist, err := m.userPlaylistRetriever.updateUserPlaylist(ctx, userID, playlistName, trackData.Tracks)
 	if err != nil {
 		if errors.Is(err, errPlaylistDoesNotExist) {
 			invalidUsageEmbed := embeds.ErrorMessageEmbed(fmt.Sprintf("Playlist `%s` does not exists, please create before attempting to add tracks", playlistName))
@@ -949,6 +949,49 @@ func (m *PlayerCog) playlistAdd(session *discordgo.Session, interaction *discord
 
 	if err := util.SendMessage(session, interaction.Interaction, true, msgData, util.WithDeletion(10*time.Second, interaction.ChannelID)); err != nil {
 		return fmt.Errorf("sending follow up message: %w", err)
+	}
+
+	return nil
+}
+
+func (m *PlayerCog) playlistDelete(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	options := interaction.ApplicationCommandData().Options
+	playlistName := options[0].StringValue()
+	user := interaction.Member.User
+
+	if err := m.userPlaylistRetriever.deleteUserPlaylist(ctx, user.ID, playlistName); err != nil {
+		if errors.Is(err, errPlaylistDoesNotExist) {
+			msgData := util.MessageData{
+				Embeds: embeds.ErrorMessageEmbed(fmt.Sprintf("Playlist `%s` does not exists", playlistName)),
+				FlagWrapper: &util.FlagWrapper{
+					Flags: discordgo.MessageFlagsEphemeral,
+				},
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+			}
+
+			if err := util.SendMessage(session, interaction.Interaction, false, msgData); err != nil {
+				return fmt.Errorf("interaction response: %w", err)
+			}
+
+			return nil
+		}
+
+		return fmt.Errorf("deleting user (%s) playlist: %w", user.ID, err)
+	}
+
+	msgData := util.MessageData{
+		Embeds: embeds.DeletedUserPlaylistEmbed(playlistName),
+		FlagWrapper: &util.FlagWrapper{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+	}
+
+	if err := util.SendMessage(session, interaction.Interaction, false, msgData); err != nil {
+		return fmt.Errorf("interaction response: %w", err)
 	}
 
 	return nil

@@ -21,7 +21,23 @@ func (a *AuditCog) RegisterCommands(session *discordgo.Session) {
 		return ac.CommandConfiguration
 	})
 
+	// Fetch existing commands
+	existingCommands, err := session.ApplicationCommands(session.State.Application.ID, "")
+	if err != nil {
+		panic(fmt.Errorf("failed to fetch existing commands: %w", err))
+	}
+
+	existingCommandNames := make(map[string]struct{})
+	for _, cmd := range existingCommands {
+		existingCommandNames[cmd.Name] = struct{}{}
+	}
+
 	for _, command := range commandsToRegister {
+		if _, exists := existingCommandNames[command.Name]; exists {
+			a.logger.Info("Skipping registering command, since it already exists", zap.String("command_name", command.Name))
+			continue
+		}
+
 		if _, err := session.ApplicationCommandCreate(session.State.Application.ID, "", command); err != nil {
 			panic(fmt.Errorf("creating command %s: %w", command.Name, err))
 		}
