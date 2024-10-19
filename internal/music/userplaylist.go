@@ -47,7 +47,7 @@ func newUserPlaylistRetriever(fs FireStore) *userPlaylistRetriever {
 func (u *userPlaylistRetriever) getUserPlaylist(ctx context.Context, userID string, playlistName string) (*userCreatedPlaylist, error) {
 	if data, ok := u.playlistCache[userID]; ok {
 		for _, playlist := range data.Playlists {
-			if playlist.Name == playlistName {
+			if strings.EqualFold(playlist.Name, playlistName) {
 				return playlist, nil
 			}
 		}
@@ -168,6 +168,12 @@ func (u *userPlaylistRetriever) getUserPlaylists(ctx context.Context, userID str
 		return nil, fmt.Errorf("could not transform document data to userPlaylists: %w", err)
 	}
 
+	for _, playlist := range playlists.Playlists {
+		if playlist.Tracks == nil {
+			playlist.Tracks = []*audiotype.TrackData{}
+		}
+	}
+
 	u.playlistCache[userID] = &playlists
 
 	_ = time.AfterFunc(time.Second*30, func() {
@@ -213,6 +219,10 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 	for _, playlist := range usersPlaylists.Playlists {
 		if strings.EqualFold(playlist.Name, playlistName) {
 			return errPlaylistAlreadyExists
+		}
+
+		if playlist.Tracks == nil {
+			playlist.Tracks = []*audiotype.TrackData{}
 		}
 	}
 
