@@ -10,6 +10,10 @@ func GuildID(guildID string) zapcore.Field {
 	return zap.String("guild_id", guildID)
 }
 
+func UserID(userID string) zapcore.Field {
+	return zap.String("user_id", userID)
+}
+
 func ChannelID(channelID string) zapcore.Field {
 	return zap.String("channel_id", channelID)
 }

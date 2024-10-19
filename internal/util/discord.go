@@ -15,7 +15,7 @@ func DeleteMessageAfterTime(session *discordgo.Session, channelID string, messag
 		return fmt.Errorf("getting channel message: %w", err)
 	}
 
-	time.AfterFunc(timeDelay, func() {
+	_ = time.AfterFunc(timeDelay, func() {
 		_ = session.ChannelMessageDelete(channelID, message.ID)
 	})
 

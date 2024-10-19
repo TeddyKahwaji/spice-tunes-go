@@ -32,6 +32,7 @@ const (
 	shakingHeadNo Gif = "https://media.giphy.com/media/S5tkhUBHTTWh865paS/giphy.gif"
 	notFound      Gif = "https://media.giphy.com/media/piL4e4WusrA4S0KODK/giphy.gif"
 	daftPunk      Gif = "https://media.giphy.com/media/blFQljCuW6s9h43SZu/giphy.gif"
+	newPlaylist   Gif = "https://media.giphy.com/media/mbrFPmLoNpBh9BrkNS/giphy.gif"
 )
 
 func ErrorMessageEmbed(msg string) *discordgo.MessageEmbed {
@@ -197,10 +198,25 @@ func MusicPlayerEmbed(trackData *audiotype.TrackData) *discordgo.MessageEmbed {
 	}
 }
 
+func AddedTracksToUserPlaylistEmbed(tracksAdded int, totalTrackCount int, playlistName string, member *discordgo.Member) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Color:       LightPink,
+		Title:       "🎶 Tracks Added! 🎶",
+		Description: fmt.Sprintf("You successfully added **%d** tracks to the playlist **`%s`**!", tracksAdded, playlistName),
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: noddingHead.String(),
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    fmt.Sprintf("Total Tracks: %d", totalTrackCount),
+			IconURL: member.User.AvatarURL(""),
+		},
+	}
+}
+
 // This function will return the added songs message embed to the user
 // if the added data was a playlist & the playlist metadata field is nil it will
 // return an error.
-func AddedTracksEmbed(trackData *audiotype.Data, member *discordgo.Member, position int) (*discordgo.MessageEmbed, error) {
+func AddedTracksToQueueEmbed(trackData *audiotype.Data, member *discordgo.Member, position int) (*discordgo.MessageEmbed, error) {
 	baseMessageEmbed := discordgo.MessageEmbed{
 		Color: LightPink,
 		Footer: &discordgo.MessageEmbedFooter{
@@ -258,6 +274,24 @@ func MusicPlayerActionEmbed(content string, member discordgo.Member) *discordgo.
 		Footer: &discordgo.MessageEmbedFooter{
 			IconURL: member.AvatarURL(""),
 			Text:    "Action initiated by " + member.User.Username,
+		},
+	}
+}
+
+func CreatedUserPlaylistEmbed(playlistName string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title: "Playlist Created",
+		Color: LightPink,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Value: fmt.Sprintf("Playlist `%s` has been created\n\n", playlistName),
+			},
+			{
+				Value: "`-` To add tracks to your playlist use </playlist-add>\n`-` To play your playlist use </playlist-play>",
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: newPlaylist.String(),
 		},
 	}
 }

@@ -189,7 +189,7 @@ func (m *PlayerCog) addToQueue(session *discordgo.Session, interaction *discordg
 			m.logger.Warn("unable to refresh view state", zap.Error(err), logger.GuildID(interaction.GuildID))
 		}
 
-		addedTrackEmbed, err := embeds.AddedTracksEmbed(trackData, interaction.Member, addedPosition)
+		addedTrackEmbed, err := embeds.AddedTracksToQueueEmbed(trackData, interaction.Member, addedPosition)
 		if err != nil {
 			m.logger.Warn("was not able to provide user with added tracks message embed", zap.Error(err), logger.GuildID(interaction.GuildID))
 			return nil
@@ -251,6 +251,16 @@ func (m *PlayerCog) reportErrorToSupportChannel(session *discordgo.Session, inte
 	return nil
 }
 
+func (m *PlayerCog) retrieveTracks(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
+	if audiotype.IsSpotify(audioType) {
+		return m.spotifyClient.GetTracksData(ctx, audioType, query)
+	} else if audiotype.IsYoutube(audioType) || audioType == audiotype.GenericSearch {
+		return m.ytSearchWrapper.GetTracksData(ctx, audioType, query)
+	}
+
+	return nil, audiotype.ErrUnsupportedAudioType
+}
+
 // this function is called when instantiating the music cog
 func (m *PlayerCog) RegisterCommands(session *discordgo.Session) {
 	commandMapping := slices.Collect(maps.Values(m.getApplicationCommands()))
@@ -268,6 +278,8 @@ func (m *PlayerCog) RegisterCommands(session *discordgo.Session) {
 	session.AddHandler(m.commandHandler)
 	// Handler for when members join or leave a voice channel.
 	session.AddHandler(m.voiceStateUpdateEvent)
+	// Handler for returning autocomplete options.
+	session.AddHandler(m.handleAutocomplete)
 	// Handler for when bot is kicked out of a guild.
 	session.AddHandler(m.guildDeleteEvent)
 }
@@ -403,14 +415,58 @@ func (m *PlayerCog) getApplicationCommands() map[string]*commands.ApplicationCom
 				Description: "Displays the current music player interface",
 			},
 		},
+		"playlist-create": {
+			Handler: m.playlistCreate,
+			CommandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "playlist-create",
+				Description: "Create and save a new custom playlist from your provided tracks",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:        "name",
+						Description: "The name of the playlist you'd like to create",
+						Type:        discordgo.ApplicationCommandOptionString,
+						Required:    true,
+					},
+				},
+			},
+		},
+		"playlist-add": {
+			Handler: m.playlistAdd,
+			CommandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "playlist-add",
+				Description: "Add tracks to one of your existing playlists",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:         "playlist_name",
+						Description:  "The name of the playlist to which you'd like to add tracks",
+						Type:         discordgo.ApplicationCommandOptionString,
+						Required:     true,
+						Autocomplete: true,
+					},
+					{
+						Name:        "query",
+						Type:        discordgo.ApplicationCommandOptionString,
+						Description: "The song or playlist you'd like to add (search by title or link)",
+						Required:    true,
+					},
+				},
+			},
+		},
+		"playlist-play": {
+			Handler: m.playlistPlay,
+			CommandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "playlist-play",
+				Description: "Play one of your saved playlists.",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name:         "playlist_name",
+						Description:  "The name of the playlist you want to play.",
+						Type:         discordgo.ApplicationCommandOptionString,
+						Required:     true,
+						Autocomplete: true,
+					},
+				},
+			},
+		},
 	}
-}
-
-func (m *PlayerCog) retrieveTracks(ctx context.Context, audioType audiotype.SupportedAudioType, query string, trackRetriever TrackDataRetriever) (*audiotype.Data, error) {
-	trackData, err := trackRetriever.GetTracksData(ctx, audioType, query)
-	if err != nil {
-		return nil, fmt.Errorf("retrieving tracks: %w", err)
-	}
-
-	return trackData, nil
 }

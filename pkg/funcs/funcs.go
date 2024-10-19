@@ -11,3 +11,25 @@ func Map[T any, R any](input []T, mapper mapperFunc[T, R]) []R {
 
 	return result
 }
+
+type validatorFunc[T any] func(T) bool
+
+func Any[T any](input []T, expression validatorFunc[T]) bool {
+	for _, elem := range input {
+		if expression(elem) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func All[T any](input []T, expression validatorFunc[T]) bool {
+	for _, elem := range input {
+		if !expression(elem) {
+			return false
+		}
+	}
+
+	return true
+}

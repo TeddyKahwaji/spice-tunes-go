@@ -1,6 +1,9 @@
 package music
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
@@ -17,6 +20,49 @@ const (
 func (m *PlayerCog) guildDeleteEvent(_ *discordgo.Session, guildDeleteEvent *discordgo.GuildDelete) {
 	delete(m.guildVoiceStates, guildDeleteEvent.ID)
 	m.logger.Info("bot has been kicked from guild", logger.GuildID(guildDeleteEvent.ID))
+}
+
+func (m *PlayerCog) handleAutocomplete(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
+	if interaction.Type != discordgo.InteractionApplicationCommandAutocomplete {
+		return
+	}
+
+	const playlistNameOption = "playlist_name"
+	option := interaction.ApplicationCommandData().Options[0]
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	if option.Name == playlistNameOption {
+		userID := interaction.Member.User.ID
+		playlists, err := m.userPlaylistRetriever.getUserPlaylists(ctx, userID)
+		if err != nil && !errors.Is(err, errNoPlaylistsCreated) {
+			m.logger.Warn("Could not retrieve users playlist", logger.UserID(userID), zap.Error(err))
+			return
+		}
+
+		query := option.StringValue()
+
+		var suggestions []*discordgo.ApplicationCommandOptionChoice
+		for _, playlist := range playlists.Playlists {
+			if strings.Contains(strings.ToLower(playlist.Name), strings.ToLower(query)) {
+				suggestions = append(suggestions, &discordgo.ApplicationCommandOptionChoice{
+					Name:  playlist.Name, // The playlist name shown to the user
+					Value: playlist.Name, // The value sent to the command
+				})
+			}
+		}
+
+		// Respond with the suggestions
+		err = session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{
+				Choices: suggestions,
+			},
+		})
+		if err != nil {
+			m.logger.Warn("Sending auto-complete interaction", zap.Error(err))
+			return
+		}
+	}
 }
 
 func (m *PlayerCog) voiceStateUpdateEvent(session *discordgo.Session, vc *discordgo.VoiceStateUpdate) {
