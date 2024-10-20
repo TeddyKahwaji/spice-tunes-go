@@ -19,9 +19,14 @@ func ChannelID(channelID string) zapcore.Field {
 }
 
 func NewLogger() *zap.Logger {
-	if util.IsProd() {
-		return zap.Must(zap.NewProduction(zap.WithCaller(true)))
+	opts := []zap.Option{
+		zap.WithCaller(true),
+		zap.AddStacktrace(zap.FatalLevel),
 	}
 
-	return zap.Must(zap.NewDevelopment())
+	if util.IsProd() {
+		return zap.Must(zap.NewProduction(opts...))
+	}
+
+	return zap.Must(zap.NewDevelopment(opts...))
 }
