@@ -112,6 +112,9 @@ func (u *userPlaylistRetriever) deleteUserPlaylist(ctx context.Context, userID s
 	}
 
 	u.playlistCache[userID] = &playlists
+	time.AfterFunc(time.Second*25, func() {
+		delete(u.playlistCache, userID)
+	})
 
 	return nil
 }
@@ -210,6 +213,9 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 			}
 
 			u.playlistCache[userID] = &userPlaylists
+			time.AfterFunc(time.Second*25, func() {
+				delete(u.playlistCache, userID)
+			})
 
 			return nil
 
@@ -246,6 +252,10 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 	usersPlaylists.Playlists = append(usersPlaylists.Playlists, playlistData)
 
 	u.playlistCache[userID] = &usersPlaylists
+
+	time.AfterFunc(time.Second*25, func() {
+		delete(u.playlistCache, userID)
+	})
 
 	return nil
 }

@@ -149,6 +149,7 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 		Collection(userDataCollection).
 		Doc(userID).
 		Get(ctx)
+
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			if _, err := docRef.Ref.Set(ctx, userData{
