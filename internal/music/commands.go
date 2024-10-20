@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	fs "cloud.google.com/go/firestore"
@@ -12,6 +14,8 @@ import (
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/commands"
+	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
 	"github.com/bwmarrin/discordgo"
@@ -1071,6 +1075,27 @@ func (m *PlayerCog) playlistPlay(session *discordgo.Session, interaction *discor
 
 	if err := m.addToQueue(session, interaction, audioData, guildPlayer); err != nil {
 		return fmt.Errorf("adding to queue: %w", err)
+	}
+
+	return nil
+}
+
+func (m *PlayerCog) help(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {
+	commandConfigurationList := slices.Collect(maps.Values(m.getApplicationCommands()))
+	commands := funcs.Map(commandConfigurationList, func(command *commands.ApplicationCommand) *discordgo.ApplicationCommand {
+		return command.CommandConfiguration
+	})
+
+	msgData := util.MessageData{
+		Embeds: embeds.HelpMenuEmbed(commands),
+		Type:   discordgo.InteractionResponseChannelMessageWithSource,
+		FlagWrapper: &util.FlagWrapper{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	}
+
+	if err := util.SendMessage(session, interaction.Interaction, false, msgData); err != nil {
+		return fmt.Errorf("sending help message: %w", err)
 	}
 
 	return nil

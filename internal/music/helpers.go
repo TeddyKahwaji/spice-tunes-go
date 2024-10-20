@@ -317,6 +317,13 @@ func (m *PlayerCog) getApplicationCommands() map[string]*commands.ApplicationCom
 				},
 			},
 		},
+		"help": {
+			Handler: m.help,
+			CommandConfiguration: &discordgo.ApplicationCommand{
+				Name:        "help",
+				Description: "Displays a list of available commands and their usage.",
+			},
+		},
 		"play-likes": {
 			Handler: m.playLikes,
 			CommandConfiguration: &discordgo.ApplicationCommand{

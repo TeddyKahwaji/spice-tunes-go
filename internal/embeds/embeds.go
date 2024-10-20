@@ -376,3 +376,21 @@ func ErrorLogEmbed(command *discordgo.ApplicationCommand, guild *discordgo.Guild
 
 	return errorLogEmbed
 }
+
+func HelpMenuEmbed(commands []*discordgo.ApplicationCommand) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title:       "**🤖 Spice Tunes Help Page 💽**",
+		Description: "Spice Tunes only supports `/` commands, to view available commands use `/` followed by the desired command",
+		Color:       LightPink,
+	}
+
+	for _, command := range commands {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("**%s**", command.Name),
+			Value:  fmt.Sprintf("``%s``", command.Description),
+			Inline: true,
+		})
+	}
+
+	return embed
+}
