@@ -105,6 +105,14 @@ func (u *userPlaylistRetriever) deleteUserPlaylist(ctx context.Context, userID s
 		return fmt.Errorf("updating saved playlist document: %w", err)
 	}
 
+	for _, playlist := range playlists.Playlists {
+		if playlist.Tracks == nil {
+			playlist.Tracks = []*audiotype.TrackData{}
+		}
+	}
+
+	u.playlistCache[userID] = &playlists
+
 	return nil
 }
 
@@ -193,7 +201,6 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 	docRef, err := u.fireStoreClient.GetDocumentFromCollection(ctx, savedPlaylistsField, userID).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-
 			userPlaylists := usersPlaylists{
 				Playlists: []*userCreatedPlaylist{playlistData},
 			}
@@ -226,8 +233,6 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 		}
 	}
 
-	u.playlistCache[userID] = &usersPlaylists
-
 	// Update existing document with the new playlist
 	if _, err := docRef.Ref.Update(ctx, []firestore.Update{
 		{
@@ -237,6 +242,10 @@ func (u *userPlaylistRetriever) saveUserPlaylist(ctx context.Context, userID str
 	}); err != nil {
 		return fmt.Errorf("updating saved playlist document: %w", err)
 	}
+
+	usersPlaylists.Playlists = append(usersPlaylists.Playlists, playlistData)
+
+	u.playlistCache[userID] = &usersPlaylists
 
 	return nil
 }
