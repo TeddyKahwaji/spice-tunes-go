@@ -1063,6 +1063,10 @@ func (m *PlayerCog) playlistPlay(session *discordgo.Session, interaction *discor
 		return nil
 	}
 
+	for _, track := range playlist.Tracks {
+		track.Requester = interaction.Member.User.Username
+	}
+
 	audioData := &audiotype.Data{
 		Tracks: playlist.Tracks,
 		PlaylistData: &audiotype.PlaylistData{
