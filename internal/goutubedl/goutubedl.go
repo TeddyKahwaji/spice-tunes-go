@@ -576,7 +576,7 @@ func (result Result) DownloadWithOptions(
 	var jsonTempPath string
 	if !result.Options.noInfoDownload {
 		jsonTempPath = path.Join(tempPath, "info.json")
-		if err := os.WriteFile(jsonTempPath, result.RawJSON, 0o600); err != nil {
+		if err := os.WriteFile(jsonTempPath, result.RawJSON, 0600); err != nil {
 			os.RemoveAll(tempPath)
 			return nil, err
 		}

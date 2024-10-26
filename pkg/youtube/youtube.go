@@ -104,6 +104,7 @@ func (yt *SearchWrapper) handleSingleTrack(requesterName string, ID string) (*au
 		Id(ID).
 		MaxResults(1).
 		Do()
+
 	if err != nil {
 		return nil, fmt.Errorf("requesting single video: %w", err)
 	}
@@ -150,14 +151,13 @@ func (yt *SearchWrapper) handleSingleTrack(requesterName string, ID string) (*au
 func (yt *SearchWrapper) handleGenericSearch(requesterName string, query string) (*audiotype.Data, error) {
 	resp, err := yt.ytSearchService.List([]string{"snippet"}).
 		Q(query).
+		Type("video").
+		EventType("completed").
 		MaxResults(1).
 		Do()
+
 	if err != nil {
 		return nil, fmt.Errorf("searching youtube query: %w", err)
-	}
-
-	if len(resp.Items) == 0 {
-		return nil, audiotype.ErrSearchQueryNotFound
 	}
 
 	if len(resp.Items) == 0 {
@@ -236,7 +236,6 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 					ID:        ID,
 				}
 
-				videoID := item.Id
 				if thumbnails := item.Snippet.Thumbnails; thumbnails != nil {
 					var thumbnailURL string
 					if thumbnails.Maxres != nil {
@@ -248,6 +247,7 @@ func (yt *SearchWrapper) handlePlaylist(requesterName string, ID string) (*audio
 					data.TrackImageURL = thumbnailURL
 				}
 
+				videoID := item.Id
 				fullURL := YoutubeVideoBase + videoID
 
 				title := item.Snippet.Title

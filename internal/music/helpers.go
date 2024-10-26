@@ -29,12 +29,12 @@ func (m *PlayerCog) globalPlay() {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					m.logger.Warn("recovered from panic that occurred on playAudio", logger.GuildID(gp.guildID))
+					m.logger.Error("recovered from panic that occurred on playAudio", logger.GuildID(gp.guildID), zap.Any("recovery", r))
 				}
 			}()
 
 			if err := m.playAudio(gp); err != nil {
-				m.logger.Warn("error playing audio", logger.GuildID(gp.guildID), zap.Error(err))
+				m.logger.Error("error playing audio", logger.GuildID(gp.guildID), zap.Error(err))
 			}
 		}()
 	}
@@ -282,6 +282,7 @@ func (m *PlayerCog) RegisterCommands(session *discordgo.Session) {
 	for _, command := range commandsToRegister {
 		if _, exists := existingCommandNames[command.Name]; exists {
 			m.logger.Info("Skipping registering command, since it already exists", zap.String("command_name", command.Name))
+
 			continue
 		}
 

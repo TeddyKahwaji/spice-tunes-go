@@ -201,10 +201,6 @@ func (m *PlayerCog) play(session *discordgo.Session, interaction *discordgo.Inte
 
 	trackData, err := m.retrieveTracks(ctx, audioType, query)
 	if err != nil {
-		return fmt.Errorf("retrieving tracks: %w", err)
-	}
-
-	if err != nil {
 		if errors.Is(err, audiotype.ErrSearchQueryNotFound) {
 			msgData := util.MessageData{
 				Embeds: embeds.NotFoundEmbed(),

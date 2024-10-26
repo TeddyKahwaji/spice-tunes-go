@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -143,13 +145,14 @@ func (g *guildPlayer) getMusicPlayerViewConfig() *views.Config {
 
 // This is a best case effort, if the song doesn't exist we don't like but don't propagate an error to the user
 // this will only return errors in non-404 case.
-func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error {
+func (g *guildPlayer) likeCurrentSong(ctx context.Context, session *discordgo.Session, interaction *discordgo.Interaction) error {
+	userID := interaction.Member.User.ID
 	currentSong := g.getCurrentSong()
+
 	docRef, err := g.fireStoreClient.GetDocumentFromCollection(ctx, guildCollection, g.guildID).
 		Collection(userDataCollection).
 		Doc(userID).
 		Get(ctx)
-
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			if _, err := docRef.Ref.Set(ctx, userData{
@@ -171,6 +174,21 @@ func (g *guildPlayer) likeCurrentSong(ctx context.Context, userID string) error 
 		},
 	}); err != nil {
 		return fmt.Errorf("updating document: %w", err)
+	}
+
+	if err := session.InteractionRespond(interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+	}); err != nil {
+		return fmt.Errorf("sending update message: %w", err)
+	}
+
+	if err := util.SendMessage(session, interaction, true, util.MessageData{
+		Embeds: embeds.LikedSongEmbed(currentSong),
+		FlagWrapper: &util.FlagWrapper{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	}); err != nil {
+		return fmt.Errorf("sending liked song message: %w", err)
 	}
 
 	return nil
@@ -263,7 +281,7 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 
 		switch messageCustomID {
 		case "SkipBtn":
-			actionMessage = "⏩ ***Track skipped*** 👍"
+			actionMessage = "⏩ **Track Skipped** 👍"
 			g.skip()
 			g.sendStopSignal()
 		case "PauseResumeBtn":
@@ -283,14 +301,12 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 		case "BackBtn":
 			g.rewind()
 			g.sendStopSignal()
-			actionMessage = "⏪ ***Rewind*** 👍"
+			actionMessage = "⏪ **Rewind** 👍"
 		case "ClearBtn":
 			g.clearUpcomingTracks()
 			actionMessage = "💥 **Cleared...** ⏹"
 		case "LikeBtn":
-			eg.Go(func() error {
-				return g.likeCurrentSong(ctx, passedInteraction.Member.User.ID)
-			})
+			return g.likeCurrentSong(ctx, session, passedInteraction)
 		}
 
 		viewConfig := g.getMusicPlayerViewConfig()
@@ -315,26 +331,13 @@ func (g *guildPlayer) generateMusicPlayerView(interaction *discordgo.Interaction
 			return fmt.Errorf("sending update message: %w", err)
 		}
 
-		if actionMessage == "" {
-			currentSong := g.getCurrentSong()
-			if err := util.SendMessage(session, passedInteraction, true, util.MessageData{
-				Embeds: embeds.LikedSongEmbed(currentSong),
-				FlagWrapper: &util.FlagWrapper{
-					Flags: discordgo.MessageFlagsEphemeral,
-				},
-			}); err != nil {
-				return fmt.Errorf("sending liked song message: %w", err)
-			}
-		} else {
-			message, err := session.ChannelMessageSendEmbed(passedInteraction.ChannelID, embeds.MusicPlayerActionEmbed(actionMessage, *interaction.Member))
-			if err != nil {
-				return fmt.Errorf("sending action initiated message: %w", err)
-			}
+		message, err := session.ChannelMessageSendEmbed(passedInteraction.ChannelID, embeds.MusicPlayerActionEmbed(actionMessage, *interaction.Member))
+		if err != nil {
+			return fmt.Errorf("sending action initiated message: %w", err)
+		}
 
-			if err := util.DeleteMessageAfterTime(session, passedInteraction.ChannelID, message.ID, 30*time.Second); err != nil {
-				return fmt.Errorf("deleting message after time: %w", err)
-			}
-
+		if err := util.DeleteMessageAfterTime(session, passedInteraction.ChannelID, message.ID, 30*time.Second); err != nil {
+			return fmt.Errorf("deleting message after time: %w", err)
 		}
 
 		if err := eg.Wait(); err != nil {
@@ -375,7 +378,13 @@ func (g *guildPlayer) getLikes(ctx context.Context, userID string) ([]*audiotype
 		return nil, fmt.Errorf("converting data to userData struct: %w", err)
 	}
 
-	return userData.LikedTracks, nil
+	filter := map[string]*audiotype.TrackData{}
+
+	for _, track := range userData.LikedTracks {
+		filter[track.TrackName] = track
+	}
+
+	return slices.Collect(maps.Values(filter)), nil
 }
 
 func (g *guildPlayer) refreshState(session *discordgo.Session) error {

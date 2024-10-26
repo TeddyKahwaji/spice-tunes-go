@@ -35,6 +35,7 @@ func (a *AuditCog) RegisterCommands(session *discordgo.Session) {
 	for _, command := range commandsToRegister {
 		if _, exists := existingCommandNames[command.Name]; exists {
 			a.logger.Info("Skipping registering command, since it already exists", zap.String("command_name", command.Name))
+
 			continue
 		}
 
@@ -57,17 +58,19 @@ func (a *AuditCog) commandHandler(session *discordgo.Session, interaction *disco
 	commandMapping := a.getApplicationCommands()
 	commandName := interaction.ApplicationCommandData().Name
 
-	if command, ok := commandMapping[commandName]; ok {
-		if err := command.Handler(session, interaction); err != nil {
-			a.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", commandName))
-			message, err := session.ChannelMessageSendEmbed(interaction.ChannelID, embeds.UnexpectedErrorEmbed())
-			if err != nil {
-				a.logger.Warn("failed to send unexpected error message", zap.Error(err))
-			}
+	command, ok := commandMapping[commandName]
+	if !ok {
+		return
+	}
 
-			_ = util.DeleteMessageAfterTime(session, interaction.ChannelID, message.ID, 30*time.Second)
-
+	if err := command.Handler(session, interaction); err != nil {
+		a.logger.Error("an error occurred during when executing command", zap.Error(err), zap.String("command", commandName))
+		message, err := session.ChannelMessageSendEmbed(interaction.ChannelID, embeds.UnexpectedErrorEmbed())
+		if err != nil {
+			a.logger.Warn("failed to send unexpected error message", zap.Error(err))
 		}
+
+		_ = util.DeleteMessageAfterTime(session, interaction.ChannelID, message.ID, 30*time.Second)
 	}
 }
 

@@ -87,7 +87,7 @@ func main() {
 		}
 	}()
 
-	httpTimeout := time.Second * 5
+	httpTimeout := time.Second * 30
 	httpClient := http.Client{
 		Timeout: httpTimeout,
 	}
