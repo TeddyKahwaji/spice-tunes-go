@@ -76,7 +76,7 @@ func newFirebaseClient(ctx context.Context, projectID string) (*firebase.Client,
 }
 
 func main() {
-	discordToken := os.Getenv("SPICE_TUNES_DISCORD_TOKEN")
+	discordToken := os.Getenv("DISCORD_TOKEN")
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	clientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 
