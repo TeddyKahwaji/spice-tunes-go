@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/embeds"
-	"github.com/TeddyKahwaji/spice-tunes-go/internal/goutubedl"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/logger"
 	"github.com/TeddyKahwaji/spice-tunes-go/internal/util"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/audiotype"
@@ -21,6 +20,7 @@ import (
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
+	"github.com/wader/goutubedl"
 	"go.uber.org/zap"
 )
 
@@ -60,16 +60,11 @@ func (m *PlayerCog) joinAndCreateGuildPlayer(session *discordgo.Session, interac
 }
 
 func (m *PlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
-	userName := "oauth"
-	password := ""
-
 	options := goutubedl.Options{
 		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 		DebugLog:   zap.NewStdLog(m.logger),
 		StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
-		Username:   &userName,
-		Password:   &password,
 	}
 
 	downloadOptions := goutubedl.DownloadOptions{
@@ -254,7 +249,9 @@ func (m *PlayerCog) reportErrorToSupportChannel(session *discordgo.Session, inte
 func (m *PlayerCog) retrieveTracks(ctx context.Context, audioType audiotype.SupportedAudioType, query string) (*audiotype.Data, error) {
 	if audiotype.IsSpotify(audioType) {
 		return m.spotifyClient.GetTracksData(ctx, audioType, query)
-	} else if audiotype.IsYoutube(audioType) || audioType == audiotype.GenericSearch {
+	}
+
+	if audiotype.IsYoutube(audioType) || audioType == audiotype.GenericSearch {
 		return m.ytSearchWrapper.GetTracksData(ctx, audioType, query)
 	}
 
