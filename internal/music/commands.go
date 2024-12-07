@@ -81,9 +81,11 @@ func NewPlayerCog(config *CogConfig) (*PlayerCog, error) {
 		ytSearchWrapper:       config.YoutubeSearchWrapper,
 	}
 
-	go musicCog.globalPlay()
-
 	return musicCog, nil
+}
+
+func (m *PlayerCog) GlobalPlay() {
+	go m.globalPlay()
 }
 
 func (m *PlayerCog) playLikes(session *discordgo.Session, interaction *discordgo.InteractionCreate) error {

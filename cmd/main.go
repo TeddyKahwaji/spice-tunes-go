@@ -139,6 +139,8 @@ func main() {
 			logger.Fatal("unable to instantiate music cog", zap.Error(err))
 		}
 
+		musicPlayerCog.GlobalPlay()
+
 		musicPlayerCog.RegisterCommands(session)
 
 		auditCog, err := audit.NewAuditCog(&audit.CogConfig{
