@@ -7,7 +7,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
 	"time"
@@ -64,7 +63,7 @@ func (m *PlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*
 		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 		DebugLog:   zap.NewStdLog(m.logger),
-		StderrFn:   func(cmd *exec.Cmd) io.Writer { return os.Stderr },
+		Cookies:    "cookies.txt",
 	}
 
 	downloadOptions := goutubedl.DownloadOptions{
