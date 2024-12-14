@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 
 COPY go.mod go.sum ./
 
-COPY cookies.txt /app/config/cookies.txt
+COPY cookies.txt /usr/src/app/cookies.txt
 
 RUN go mod download
 
