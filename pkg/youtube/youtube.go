@@ -152,7 +152,7 @@ func (yt *SearchWrapper) handleGenericSearch(requesterName string, query string)
 	resp, err := yt.ytSearchService.List([]string{"snippet"}).
 		Q(query).
 		Type("video").
-		EventType("completed").
+		EventType("none").
 		MaxResults(1).
 		Do()
 
