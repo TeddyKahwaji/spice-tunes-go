@@ -19,7 +19,6 @@ import (
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/funcs"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
-	"github.com/wader/goutubedl"
 	"go.uber.org/zap"
 )
 
@@ -59,41 +58,37 @@ func (m *PlayerCog) joinAndCreateGuildPlayer(session *discordgo.Session, interac
 }
 
 func (m *PlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*os.File, error) {
-	options := goutubedl.Options{
-		Type:       goutubedl.TypeSingle,
-		HTTPClient: m.httpClient,
-		DebugLog:   zap.NewStdLog(m.logger),
-		Cookies:    "/app/cookies.txt",
-	}
-
-	downloadOptions := goutubedl.DownloadOptions{
-		DownloadAudioOnly: true,
-	}
-
-	if strings.Contains(audioTrackName, "ytsearch") {
-		options.Type = goutubedl.TypePlaylist
-		downloadOptions.PlaylistIndex = 1
-	}
-
-	result, err := goutubedl.New(ctx, audioTrackName, options)
+	result, err := m.ytDownloader.Run(ctx, audioTrackName)
 	if err != nil {
-		return nil, fmt.Errorf("attempting to download from youtube: %w", err)
+		return nil, fmt.Errorf("downloading file: %w", err)
 	}
 
-	downloadResult, err := result.DownloadWithOptions(ctx, downloadOptions)
+	info, err := result.GetExtractedInfo()
 	if err != nil {
-		return nil, fmt.Errorf("downloading youtube data: %w", err)
+		return nil, fmt.Errorf("getting extracted info: %w", err)
 	}
 
-	defer func() {
-		if err := downloadResult.Close(); err != nil {
-			m.logger.Warn("couldn't close downloaded result", zap.Error(err))
+	var fileName string
+
+	for _, data := range info {
+		if *data.AltFilename != "" {
+			fileName = *data.Filename
 		}
-	}()
+	}
 
-	file, err := util.DownloadFileToTempDirectory(downloadResult)
+	if fileName == "" {
+		return nil, errors.New("no file found")
+	}
+
+	fileName = strings.Replace(fileName, ".webm", ".m4a", 1)
+
+	file, err := os.Open(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("downloading youtube content to temporary file: %w", err)
+		return nil, fmt.Errorf("opening file: %w", err)
+	}
+
+	if _, err = file.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("seeking file to seek.start: %w", err)
 	}
 
 	return file, nil
@@ -421,13 +416,14 @@ func (m *PlayerCog) getApplicationCommands() map[string]*commands.ApplicationCom
 				Description: "Displays the music queue",
 			},
 		},
-		"spice": {
-			Handler: m.spice,
-			CommandConfiguration: &discordgo.ApplicationCommand{
-				Name:        "spice",
-				Description: "Add recommended songs to the queue based on the current song playing",
-			},
-		},
+		// TODO: Spotify has deprecated the Recommendations API, find alternative
+		// "spice": {
+		// 	Handler: m.spice,
+		// 	CommandConfiguration: &discordgo.ApplicationCommand{
+		// 		Name:        "spice",
+		// 		Description: "Add recommended songs to the queue based on the current song playing",
+		// 	},
+		// },
 		"playerview": {
 			Handler: m.playerview,
 			CommandConfiguration: &discordgo.ApplicationCommand{

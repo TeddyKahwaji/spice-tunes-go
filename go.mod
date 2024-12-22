@@ -7,7 +7,7 @@ require (
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/jonas747/dca v0.0.0-20210930103944-155f5e5f0cc7
-	github.com/wader/goutubedl v0.0.0-20241211122818-4749af12f9d5
+	github.com/lrstanley/go-ytdlp v0.0.0-20241221063727-6717edbb36dd
 	github.com/zmb3/spotify v1.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.24.0
@@ -29,8 +29,10 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.49.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.49.0 // indirect
+	github.com/ProtonMail/go-crypto v1.1.3 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cloudflare/circl v1.5.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20240905190251-b4127c9b8d78 // indirect
 	github.com/envoyproxy/go-control-plane v0.13.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect

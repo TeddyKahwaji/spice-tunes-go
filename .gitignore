@@ -24,6 +24,7 @@ go.work.sum
 # env file
 .env
 
+*.m4a
 
 # debug bin 
 *debug_bin*
@@ -31,4 +32,4 @@ go.work.sum
 # vscode settings
 .vscode
 main
-cookies.txt
+*.txt
