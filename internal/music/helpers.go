@@ -80,7 +80,7 @@ func (m *PlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*
 		return nil, errors.New("no file found")
 	}
 
-	fileName = strings.Replace(fileName, ".webm", ".m4a", 1)
+	fileName = strings.Replace(fileName, ".webm", ".opus", 1)
 
 	file, err := os.Open(fileName)
 	if err != nil {

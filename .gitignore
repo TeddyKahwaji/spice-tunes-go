@@ -25,6 +25,10 @@ go.work.sum
 .env
 
 *.m4a
+*.mp3 
+*.opus
+
+
 
 # debug bin 
 *debug_bin*

@@ -63,19 +63,9 @@ func newYTDLPDownloader() *ytdlp.Command {
 		Verbose().
 		ExtractAudio().
 		NoPlaylist().
-		RecodeVideo("m4a").
 		NoOverwrites().
 		PrintJSON().
 		Continue().
-		ProgressFunc(100*time.Millisecond, func(prog ytdlp.ProgressUpdate) {
-			fmt.Printf(
-				"%s @ %s [eta: %s] :: %s\n",
-				prog.Status,
-				prog.PercentString(),
-				prog.ETA(),
-				prog.Filename,
-			)
-		}).
 		Output("%(extractor)s - %(title)s.%(ext)s")
 }
 
