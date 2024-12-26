@@ -102,6 +102,10 @@ func (g *guildPlayer) hasView() bool {
 }
 
 func (g *guildPlayer) getMusicPlayerViewConfig() *views.Config {
+	if g.queuePtr.Load() >= int32(len(g.queue)) {
+		g.queuePtr.Store(int32(len(g.queue) - 1))
+	}
+
 	currentTrack := g.queue[g.queuePtr.Load()]
 
 	musicPlayerEmbed := embeds.MusicPlayerEmbed(currentTrack)
