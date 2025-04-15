@@ -19,7 +19,6 @@ import (
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
 	"github.com/bwmarrin/discordgo"
-	"github.com/lrstanley/go-ytdlp"
 	"go.uber.org/zap"
 )
 
@@ -49,7 +48,6 @@ type PlayerCog struct {
 	guildVoiceStates      map[string]*guildPlayer
 	spotifyClient         *spotify.SpotifyClientWrapper
 	ytSearchWrapper       *youtube.SearchWrapper
-	ytDownloader          *ytdlp.Command
 }
 
 type CogConfig struct {
@@ -59,7 +57,6 @@ type CogConfig struct {
 	HTTPClient           *http.Client
 	SpotifyWrapper       *spotify.SpotifyClientWrapper
 	YoutubeSearchWrapper *youtube.SearchWrapper
-	YoutubeDownloader    *ytdlp.Command
 }
 
 func NewPlayerCog(config *CogConfig) (*PlayerCog, error) {
@@ -68,8 +65,7 @@ func NewPlayerCog(config *CogConfig) (*PlayerCog, error) {
 		config.SpotifyWrapper == nil ||
 		config.YoutubeSearchWrapper == nil ||
 		config.Session == nil ||
-		config.FireStoreClient == nil ||
-		config.YoutubeDownloader == nil {
+		config.FireStoreClient == nil {
 		return nil, errors.New("config was populated with nil value")
 	}
 
@@ -83,7 +79,6 @@ func NewPlayerCog(config *CogConfig) (*PlayerCog, error) {
 		guildVoiceStates:      make(map[string]*guildPlayer),
 		spotifyClient:         config.SpotifyWrapper,
 		ytSearchWrapper:       config.YoutubeSearchWrapper,
-		ytDownloader:          config.YoutubeDownloader,
 	}
 
 	return musicCog, nil

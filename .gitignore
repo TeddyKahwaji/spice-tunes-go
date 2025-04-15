@@ -36,4 +36,4 @@ go.work.sum
 # vscode settings
 .vscode
 main
-*.txt
+cookies.txt

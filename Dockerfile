@@ -1,4 +1,4 @@
-FROM golang:1.23 AS builder
+FROM golang:1.24 AS builder
 
 WORKDIR /usr/src/app
 
@@ -12,7 +12,7 @@ COPY . .
 
 RUN go build -o /go/bin/app ./cmd
 
-FROM golang:1.23
+FROM golang:1.24
 
 WORKDIR /usr/src/app
 

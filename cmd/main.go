@@ -17,7 +17,6 @@ import (
 	sw "github.com/TeddyKahwaji/spice-tunes-go/pkg/spotify"
 	"github.com/TeddyKahwaji/spice-tunes-go/pkg/youtube"
 	"github.com/bwmarrin/discordgo"
-	"github.com/lrstanley/go-ytdlp"
 	"github.com/zmb3/spotify"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/clientcredentials"
@@ -55,18 +54,6 @@ func newSpotifyWrapperClient(ctx context.Context, clientID string, clientSecret 
 	client := spotify.NewClient(tokenClient)
 
 	return sw.NewSpotifyClientWrapper(&client)
-}
-
-func newYTDLPDownloader() *ytdlp.Command {
-	return ytdlp.New().
-		Cookies("/app/cookies.txt").
-		Verbose().
-		ExtractAudio().
-		NoPlaylist().
-		NoOverwrites().
-		PrintJSON().
-		Continue().
-		Output("%(extractor)s - %(title)s.%(ext)s")
 }
 
 func newFirebaseClient(ctx context.Context, projectID string) (*firebase.Client, error) {
@@ -140,8 +127,6 @@ func main() {
 			logger.Fatal("unable to instantiate firebase client", zap.Error(err))
 		}
 
-		ytdlp.MustInstall(ctx, nil)
-
 		musicPlayerCog, err := music.NewPlayerCog(&music.CogConfig{
 			FireStoreClient:      firebaseClient,
 			Session:              session,
@@ -149,9 +134,7 @@ func main() {
 			SpotifyWrapper:       spotifyWrapper,
 			Logger:               logger,
 			YoutubeSearchWrapper: youtubeSearchWrapper,
-			YoutubeDownloader:    newYTDLPDownloader(),
 		})
-
 		if err != nil {
 			logger.Fatal("unable to instantiate music cog", zap.Error(err))
 		}
