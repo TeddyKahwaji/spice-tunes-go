@@ -63,7 +63,6 @@ func (m *PlayerCog) downloadTrack(ctx context.Context, audioTrackName string) (*
 		Type:       goutubedl.TypeSingle,
 		HTTPClient: m.httpClient,
 		DebugLog:   zap.NewStdLog(m.logger),
-		Cookies:    "/app/cookies.txt",
 	}
 
 	downloadOptions := goutubedl.DownloadOptions{

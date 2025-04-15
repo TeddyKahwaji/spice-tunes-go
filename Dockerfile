@@ -4,8 +4,6 @@ WORKDIR /usr/src/app
 
 COPY go.mod go.sum ./
 
-COPY cookies.txt /app/cookies.txt
-
 RUN go mod download
 
 COPY . .
@@ -31,8 +29,6 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
     
 COPY --from=builder /go/bin/app /go/bin/app
 
-# Copy cookies.txt to /app directory in the runtime image
-COPY cookies.txt /app/cookies.txt
 
 EXPOSE 8080
 
